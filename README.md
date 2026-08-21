@@ -57,7 +57,7 @@ The launcher exports `CX_ROOT`, `CX_GRAPHICS_BACKEND=d3dmetal` and the `libd3dsh
 
 ## Fine print
 
-- The installer downloads the **CrossOver trial** from CodeWeavers' own servers and builds everything locally; nothing proprietary is redistributed here. If this setup sticks, [buy a CrossOver license](https://www.codeweavers.com/store) - CodeWeavers fund a huge share of wine development.
+- The installer downloads the **CrossOver trial** from CodeWeavers' own servers and builds everything locally; nothing proprietary is redistributed here. The trial's 14-day limit applies to the CrossOver app, which this setup never runs - the extracted wine engine is open source (LGPL) and has no expiry. If this setup sticks, [buy a CrossOver license](https://www.codeweavers.com/store) anyway: CodeWeavers fund a huge share of wine development, and the license nudge is about supporting the people who made this possible, not about anything breaking.
 - Deadlock uses user-mode VAC today and wine players are not being banned, but Valve does not support this setup. A future anti-cheat change could break it. You accept that risk.
 - Not affiliated with Valve, CodeWeavers, or Apple.
 
