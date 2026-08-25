@@ -44,6 +44,28 @@ Three translation layers, all local:
 
 The launcher exports `CX_ROOT`, `CX_GRAPHICS_BACKEND=d3dmetal` and the `libd3dshared` path. Without those, CrossOver's `cxcompatdb.so` silently skips the D3DMetal redirect and you get wine's fallback renderer at ~10 FPS. That trap alone justified this repo.
 
+## Performance checklist
+
+Low FPS or stutter? Run these checks before touching game settings - they were the actual killers on my machine, and none of them show an error anywhere.
+
+**1. Verify D3DMetal is really rendering** (the 10 FPS trap). While the game runs:
+
+```sh
+lsof -p $(pgrep -f deadlock.exe) | grep -oiE 'D3DMetal|wined3d|dxvk' | sort -u
+```
+
+If this prints `wined3d` and no `D3DMetal`, you are on wine's slow fallback renderer - that alone is the difference between 10 and 60+ FPS. It happens silently when the D3DMetal environment (`CX_ROOT` and friends) does not reach the game. Launch through `Deadlock.app`, not a bare `wine` call; on other setups (Sikarugir, hand-rolled wrappers) check their engine actually engages D3DMetal.
+
+**2. Hunt orphaned wine processes.** Crashed or half-killed sessions leave wine processes that show **0% in `ps` and Activity Monitor** (decayed averages) while spinning half a core each, forever:
+
+```sh
+sudo powermetrics -n 1 -i 3000 --samplers tasks | head -25
+```
+
+Anything named `wine-preloader` burning hundreds of ms/s that is not your current session is a zombie - kill it. I found fourteen of them eating ~7 cores; FPS tripled on the spot. The launcher in this repo sweeps them on every start, but other setups do not.
+
+**3. Know your teamfight stutter.** On fanless machines (MacBook Air) sustained teamfight load means thermal throttling, and in the first few sessions every ability effect you see for the first time compiles a Metal pipeline mid-fight. The shader part genuinely goes away with hours played; the thermal part improves with an FPS cap (60) and lower resolution. Also check nothing else is eating cores while you play - a background compile job stutters the game exactly like a bad config does.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
