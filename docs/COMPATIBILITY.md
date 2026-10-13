@@ -4,11 +4,11 @@ Keep observed results distinct from upstream claims. Last updated 2026-10-13.
 
 | Configuration | Installation | Steam account | Deadlock rendering | Multiplayer / Cloud |
 | --- | --- | --- | --- | --- |
-| M2 Max, 32 GiB, macOS 26.6.2; Highball Wine 20261006 + DXMT a444716 | Steam and Deadlock build 25841406 installed | User confirmed successful sign-in | D3D11 probe passes; first game launch crashed | Not yet tested |
+| M2 Max, 32 GiB, macOS 26.6.2; Highball Wine 20261006 + DXMT a444716 | Steam and Deadlock build 25841406 installed, including a clean installation | User confirmed sign-in in both installations and restart after relocation | User confirmed original gameplay and fresh-install Hero Sandbox; startup/exit faults remain | Not yet tested |
 | Same Mac; Wine Sikarugir 11.0_1 + DXMT 0.80 | Steam installs and self-updates | Login UI stays black, including software rendering | D3D11 probe passes; game not tested | Not tested |
 | Same Mac; official CrossOver 26.3.0 | App signature and notarization verified; trial opens | Not yet tested | Not yet tested | Not yet tested |
 
-Manager: 26 automated tests pass locally on Python 3.13.2. These are not game
+Manager: 39 automated tests pass locally on Python 3.13.2. These are not game
 compatibility tests. The CrossOver trial started 2026-10-13; no purchase was made.
 
 Both free-runtime probes reported Apple M2 Max, feature level 11.0, successful
@@ -23,8 +23,26 @@ The user observed Wine's Program Error for `deadlock.exe` during the first launc
 A Deadlock assertion dump and separate Steam/overlay dumps were preserved locally.
 The captured access violation was in Steam's `sechost.dll` during a shutdown
 request; it does not establish the game-crash cause. A second diagnostic launch
-was stopped at the user's request before consolidation. No successful gameplay is
-claimed. Cold restart after consolidation still needs testing.
+was stopped at the user's request before consolidation.
+
+After consolidation, a stale Wine temporary loader-cache symlink still referenced
+the old runtime location. With the profile stopped, only the cache with that
+verified stale target was archived. Wine rebuilt it; a Windows command probe then
+succeeded and the user confirmed Steam was visible after a cold client restart.
+The manager now reports an immediate nonzero loader exit instead of returning a
+PID as though launch succeeded. Automatic workspace relocation remains unimplemented.
+
+On the next game launch, the user confirmed a visible main menu or game. Wine
+logged virtual-memory allocation failures, but the game remained alive and macOS
+reported normal memory pressure; physical RAM exhaustion is not established.
+A new Deadlock assertion dump had no exception stream. At approximately 11:35
+Pacific, Wine logged a write-access fault and the original game process exited.
+The user confirmed deliberately quitting and relaunching the game; the new game
+process remained running. The user later confirmed gameplay, jitter and occasional
+FPS dips on the built-in display, then deliberately quit again. These were observed
+exit-path faults, not evidence of unexpected gameplay crashes during those attempts.
+Sustained gameplay, input/audio,
+multiplayer and Cloud behavior still need acceptance testing.
 
 A direct Mach-O dependency scan of the Highball engine's 31 Unix modules found
 `winedmo.so` references missing Intel Homebrew FFmpeg libraries: `libavformat.63`,
@@ -37,6 +55,52 @@ After consolidation, all 5,641 files/links in the Highball Wine, paired DXMT and
 support installations matched their pinned archives. Steam metadata and dry-run
 launch paths point inside the new workspace. An offline backup of 52 Deadlock data
 files was created and its per-file hashes verified. Recovery has not been tested.
+
+## Clean installation and performance test
+
+The local SwiftUI app bootstrapped an empty workspace using its bundled Python,
+downloaded and verified the pinned runtimes, installed Windows Steam, and reached
+the login form after the client updated. The user confirmed sign-in and a fresh
+Deadlock download. Initial delay before the Steam window appeared was not a
+confirmed black-window failure. The fresh runtime's 5,641 files/links matched the
+archives. After a second verified backup containing 55 game-data files, the user
+authorized deletion of the old game installation and failed comparison bottle.
+The fresh bottle was moved into the main workspace without copying the game;
+duplicate runtime/download directories were removed. No Steam login data was
+included in the game-data backup.
+
+The first fresh game launch requested 1920×1080 fullscreen via Steam arguments,
+with the DXMT 60 FPS cap and Metal HUD enabled. It exited before presenting any
+game HUD samples. Wine logged an access violation at
+`I_ScUnregisterDeviceNotification+0x34` in `sechost.dll`. The assertion dump had no
+exception stream and Wine's debugger could not recover a backtrace. The same
+function also faults during normal exits; the initial startup cause remains unknown.
+
+A normal Steam retry, with the cap/HUD unchanged and no forced display arguments,
+reached the menu. The user confirmed Hero Sandbox and usable gameplay. This is
+recovery evidence, not proof that fullscreen arguments caused the first failure.
+The tested display was **1512×982 borderless, 120 Hz**, with a saved render scale of
+approximately **73%**, AC power and Low Power Mode off. The screenshot identified
+DXMT a444716, D3D11 feature level 11.1, about 59 FPS and Game Mode off.
+
+During approximately five minutes after the sandbox-start confirmation, recorded
+presentation samples had a 16.67 ms median/p95 and a 25 ms p99. The user reported
+small dips and then **Mina's ultimate (summoning bats) dropping to 40 FPS or below**,
+with rapid perceived heating. That ability is the next repeatable stress case.
+Long gaps in the log, including possible focus changes, prevent treating its overall
+average as a gameplay FPS benchmark. The test ended before the planned warm-up and
+controlled comparison finished. This does **not** pass steady 60 FPS or 1080p acceptance.
+`pmset` reported no recorded thermal/performance warning; it did not establish a
+temperature or rule out throttling. After the user quit normally, Wine logged the
+same cleanup fault despite the game window appearing to close normally.
+
+Upstream Wine has two relevant fixes for invalid device-notification handles:
+[argument validation and fault handling](https://github.com/wine-mirror/wine/commit/d8aa0abfb5923e4d0cbbb659e13f9f8f7c5c9ee0)
+and [skip removal when the handle is invalid](https://github.com/wine-mirror/wine/commit/f38f3ac7708f93ceaf1ff2404690bd4c8d88d6d0).
+The installed binary's disassembly lacks these guards. A source backport or engine
+upgrade is a candidate for a separate runtime test; it has not been applied or
+proven to resolve Deadlock's startup/exit behavior. Do not mix an arbitrary newer
+`sechost.dll` into the current runtime.
 
 For each live result add: date, macOS/chip/RAM, engine and graphics versions,
 Deadlock build ID, resolution/settings, test duration, what worked, what failed,

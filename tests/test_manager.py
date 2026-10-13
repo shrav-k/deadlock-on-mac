@@ -49,10 +49,17 @@ class WorkspaceTest(unittest.TestCase):
             command = launch_command(self.profile, action)
             self.assertEqual(command[1:], [str(self.steam), uri])
             with patch("deadlock_mac.runtime.subprocess.Popen") as popen:
+                popen.return_value.wait.return_value = 0
                 start(self.profile, action, self.root / (action + ".log"))
                 self.assertEqual(popen.call_args.args[0], command)
                 self.assertNotIn("shell", popen.call_args.kwargs)
                 self.assertEqual(popen.call_args.kwargs["cwd"], self.profile["prefix"])
+
+    def test_immediate_loader_failure_is_not_reported_as_launch_success(self):
+        with patch("deadlock_mac.runtime.subprocess.Popen") as popen:
+            popen.return_value.wait.return_value = 1
+            with self.assertRaisesRegex(ManagerError, "exited immediately"):
+                start(self.profile, "steam", self.root / "loader-error.log")
 
     def test_missing_steam_never_launches_game_directly(self):
         self.steam.unlink()

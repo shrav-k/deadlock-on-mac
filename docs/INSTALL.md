@@ -8,18 +8,23 @@ installation flow if needed; this manager does not silently accept its license.
 Clone this repo inside `Projects/Games/Deadlock`. From the repository:
 
 ```sh
-python3 bin/deadlock-mac runtime-install
-python3 bin/deadlock-mac profile-create
-python3 bin/deadlock-mac setup
+python3 bin/deadlock-mac bootstrap
 python3 bin/deadlock-mac steam
 ```
 
-`runtime-install` fetches the pinned Highball Wine engine and paired DXMT build,
+`bootstrap` checks the Mac, disk space and Rosetta, then combines runtime installation,
+profile creation and Steam setup. The lower-level `runtime-install`, `profile-create`
+and `setup` commands remain available. Runtime installation fetches the pinned Highball Wine engine and paired DXMT build,
 plus Sikarugir support libraries,
 checks their hashes, and extracts them under `../Runtimes`. `setup` initializes
 `../Bottles/highball` and installs the official Windows Steam client. Downloads, state,
 game files and backups stay outside this repository. macOS/Wine can still create
 ordinary per-user caches and preferences outside Games.
+
+The [local app preview](../packaging/README.md) offers the same sequence with buttons
+and its own pinned Python runtime. Players using that app need no Homebrew, Git,
+pip or compiler. Its first Steam startup can take several minutes while the client
+updates; an initially absent window does not establish a rendering failure.
 
 Log into **your existing Steam account** in the Windows Steam window. Use Steam
 Guard or the Steam Mobile QR flow yourself. You do not need another invitation if
@@ -37,6 +42,11 @@ The manager always asks Steam to launch app **1422450**. The native Mac Steam
 client cannot install a native Mac version of Deadlock; Windows Steam inside Wine
 downloads Valve's Windows build. Keep the managed default Steam library for this
 first version; diagnostics and backups do not yet discover external libraries.
+
+For the first game launch, leave display overrides unset. A clean-install test
+with forced 1080p fullscreen launch arguments crashed; a normal Steam retry reached
+the menu with the same FPS cap and HUD. Causation is not established. Change output
+resolution through the game's settings after reaching the menu, and verify it there.
 
 ## Account data, Cloud and friends
 

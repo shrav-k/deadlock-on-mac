@@ -20,3 +20,6 @@ jobs:
         env:
           PYTHONPATH: src
       - run: python bin/deadlock-mac --help
+      - name: Check native app source
+        if: matrix.os == 'macos-14' && matrix.python == '3.13'
+        run: xcrun swiftc -typecheck -parse-as-library -target arm64-apple-macos15.0 packaging/DeadlockManager.swift

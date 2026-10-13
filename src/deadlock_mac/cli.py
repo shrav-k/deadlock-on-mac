@@ -12,9 +12,12 @@ import tarfile
 import urllib.error
 
 from . import __version__
-from .backup import snapshot
+from .backup import snapshot, wine_processes_running
 from .catalog import REPO, artifacts, catalog, components, runtime_set
-from .diagnostics import engine_dependencies
+from .diagnostics import engine_dependencies, power_status
+from . import performance
+from . import game_settings
+from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
 from .steam import game_status
@@ -91,19 +94,26 @@ def create_profile(workspace, name, crossover=None, family="highball"):
     print(f"Created {name}. Its dedicated Steam environment is {prefix}.")
 
 
-def setup(workspace, profile):
-    if profile["provider"] == "crossover":
-        raise ManagerError("Install Steam using CrossOver's built-in Steam recipe into this profile's bottle; see docs/INSTALL.md.")
+def preflight(workspace, family):
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise ManagerError("The free runtime is currently intended for Apple Silicon macOS.")
-    minimum = (15, 0) if profile.get("wine_family") == "highball" else (14, 6)
-    if profile.get("runtime_set"):
-        minimum = tuple(runtime_set(profile["runtime_set"])["minimum_macos"])
+    minimum = tuple(runtime_set(family)["minimum_macos"])
     version = tuple(int(v) for v in platform.mac_ver()[0].split(".")[:2])
     if version < minimum:
         raise ManagerError(f"This runtime requires macOS {minimum[0]}.{minimum[1]} or newer.")
     if shutil.disk_usage(workspace).free < 80 * 1024**3:
         raise ManagerError("Keep at least 80 GiB free for setup and game updates.")
+    result = subprocess.run(["/usr/bin/arch", "-x86_64", "/usr/bin/true"], capture_output=True, timeout=15)
+    if result.returncode:
+        raise ManagerError("Rosetta 2 is required. Install it using macOS's normal installation flow, then retry.")
+
+
+def setup(workspace, profile):
+    if profile["provider"] == "crossover":
+        raise ManagerError("Install Steam using CrossOver's built-in Steam recipe into this profile's bottle; see docs/INSTALL.md.")
+    preflight(workspace, profile.get("runtime_set", profile.get("wine_family", "sikarugir")))
+    if wine_processes_running():
+        raise ManagerError("Exit Windows Steam and all Wine bottles before setup; an active environment cannot be reinitialized.")
     wine = wine_binary(profile)
     env = environment(profile)
     prefix = private_dir(profile["prefix"])
@@ -125,6 +135,21 @@ def setup(workspace, profile):
     print(f"Steam is installed. Run steam and sign into your existing account. Setup log: {logfile}")
 
 
+def bootstrap(workspace, name, family):
+    preflight(workspace, family)
+    if wine_processes_running():
+        raise ManagerError("Exit Windows Steam and all Wine bottles before setup. Use Open Steam or Play for an existing installation.")
+    path = profile_file(workspace, name)
+    if path.exists():
+        profile = load_profile(workspace, name)
+        if profile.get("runtime_set") != family:
+            raise ManagerError("Existing profile uses another runtime; choose a new profile ID.")
+    install_runtimes(workspace, family)
+    if not path.exists():
+        create_profile(workspace, name, family=family)
+    setup(workspace, load_profile(workspace, name))
+
+
 def doctor(workspace, profile):
     result = {"manager_version": __version__, "system": platform.system(),
               "macos": platform.mac_ver()[0], "architecture": platform.machine(),
@@ -133,6 +158,8 @@ def doctor(workspace, profile):
               "graphics_requested": profile["graphics"], "graphics_verified_in_game": False,
               "bottle_exists": Path(profile["prefix"]).is_dir(),
               "steam_account": "Sign in and verify in Steam; credentials are not inspected."}
+    result["power"] = power_status()
+    result["performance_requested"] = performance.load(workspace, profile["id"])
     try:
         steam = steam_path(profile)
         result["steam_installed"] = True
@@ -163,6 +190,8 @@ def main(argv=None):
                         help="Deadlock workspace folder; runtimes, bottles and private state live here")
     parser.add_argument("--profile", default=runtime_catalog["default"])
     sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("bootstrap", help="Check the Mac, install pinned runtimes and set up Windows Steam")
+    p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     p = sub.add_parser("runtime-install", help="Download and verify a pinned free Wine + DXMT pair")
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     p = sub.add_parser("runtime-verify", help="Check installed runtime files against pinned archives")
@@ -179,17 +208,38 @@ def main(argv=None):
     sub.add_parser("runtime-dependencies", help="Inspect direct Wine module imports for missing host libraries")
     sub.add_parser("backup", help="Snapshot Deadlock data while all Steam/Wine processes are closed")
     sub.add_parser("profiles", help="List configured runtime profiles")
+    p = sub.add_parser("performance", help="Inspect or change reversible launch settings; Steam must be closed to change them")
+    p.add_argument("--fps-cap", type=int)
+    p.add_argument("--sync", choices=("auto", "none", "msync", "esync"))
+    p.add_argument("--hud", choices=("on", "off"))
+    p.add_argument("--hud-log", choices=("on", "off"))
+    p.add_argument("--reset", action="store_true")
+    p = sub.add_parser("graphics-preset", help="Preview a backed-up 1080p fullscreen edit; preserves quality and render scale")
+    p.add_argument("--apply", action="store_true")
+    p = sub.add_parser("performance-report", help="Summarize Metal HUD frame intervals for a game PID")
+    p.add_argument("--log", type=Path, required=True)
+    p.add_argument("--pid", type=int, required=True)
+    p.add_argument("--warmup-seconds", type=float, default=0)
+    p.add_argument("--start-time", help="Local ISO time when the gameplay segment started (no UTC offset)")
+    p.add_argument("--end-time", help="Exclusive local ISO end time, to exclude later menus or settings")
     args = parser.parse_args(argv)
     workspace = args.workspace.expanduser().resolve()
     try:
         identifier(args.profile)
         if sys.version_info < (3, 12):
             raise ManagerError("Python 3.12 or newer is required for safe archive extraction.")
+        if args.command == "bootstrap" and not workspace.exists():
+            private_dir(workspace)
         if not workspace.is_dir():
             raise ManagerError("Workspace must be an existing directory.")
         if args.command == "runtimes":
             for name, entry in runtime_catalog["runtimes"].items():
                 print(f"{name}: {entry['label']} — {entry['status']}")
+            return 0
+        if args.command == "performance-report":
+            with args.log.open() as stream:
+                print(json.dumps(summarize(stream, args.pid, args.warmup_seconds,
+                                           args.start_time, args.end_time), indent=2))
             return 0
         if args.command == "profiles":
             folder = workspace / "DeadlockData/profiles"
@@ -197,7 +247,7 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "setup", "backup"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "setup", "backup", "performance", "graphics-preset"):
             profile = load_profile(workspace, args.profile)
         if args.command == "runtime-dependencies":
             result = engine_dependencies(profile)
@@ -208,10 +258,27 @@ def main(argv=None):
             return 0
         if getattr(args, "dry_run", False):
             print(json.dumps({"argv": launch_command(profile, args.command),
+                              "performance_requested": performance.load(workspace, profile["id"]),
                               "provider": profile["provider"], "executes": False}, indent=2))
             return 0
         with lock(workspace / "DeadlockData"):
-            if args.command == "runtime-install":
+            if args.command == "bootstrap":
+                bootstrap(workspace, args.profile, args.runtime)
+            elif args.command == "graphics-preset":
+                print(json.dumps(game_settings.configure(workspace, profile, apply=args.apply), indent=2))
+            elif args.command == "performance":
+                settings = performance.load(workspace, args.profile)
+                if args.reset:
+                    settings = dict(performance.DEFAULTS)
+                for key, value in (("fps_cap", args.fps_cap), ("sync", args.sync),
+                                   ("metal_hud", None if args.hud is None else args.hud == "on"),
+                                   ("hud_logging", None if args.hud_log is None else args.hud_log == "on")):
+                    if value is not None:
+                        settings[key] = value
+                if args.reset or any(v is not None for v in (args.fps_cap, args.sync, args.hud, args.hud_log)):
+                    performance.save(workspace, profile, settings)
+                print(json.dumps(settings, indent=2))
+            elif args.command == "runtime-install":
                 install_runtimes(workspace, args.runtime)
             elif args.command == "runtime-verify":
                 verify_runtimes(workspace, args.runtime)
@@ -224,7 +291,8 @@ def main(argv=None):
             else:
                 logs = private_dir(workspace / "DeadlockData/logs" / args.profile)
                 log = logs / f"{args.command}-{timestamp()}.log"
-                pid = start(profile, args.command, log)
+                tuning = performance.load(workspace, args.profile)
+                pid = start(profile, args.command, log, tuning)
                 print(f"Request sent to Windows Steam (launcher PID {pid}). Private log: {log}")
                 print("Check Steam for login, updates or Cloud conflicts. This is not proof of a successful game launch.")
         return 0

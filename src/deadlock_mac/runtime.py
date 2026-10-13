@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import plistlib
 import subprocess
+import json
 
 from .storage import ManagerError, identifier, no_symlinks
 
@@ -87,7 +88,7 @@ def wine_binary(profile):
     raise ManagerError("Wine executable is missing from the registered runtime.")
 
 
-def environment(profile):
+def environment(profile, tuning=None):
     env = clean_env()
     env["WINEPREFIX"] = profile["prefix"]
     env["WINEDEBUG"] = "-all,err+all"
@@ -119,6 +120,9 @@ def environment(profile):
             # Only the paired Highball Wine/DXMT builds support remote layers.
             env["DXMT_ALLOW_CROSS_PROCESS_SWAPCHAIN"] = "1"
         env["WINEDLLOVERRIDES"] = "d3d10core,d3d11,dxgi,winemetal=b"
+        if tuning is not None:
+            from .performance import variables
+            env.update(variables(tuning))
     return env
 
 
@@ -135,13 +139,25 @@ def launch_command(profile, action):
     return [str(wine_binary(profile)), str(steam), URIS[action]]
 
 
-def start(profile, action, log):
+def start(profile, action, log, tuning=None):
     command = launch_command(profile, action)
     if profile["provider"] == "crossover":
         verify_crossover(profile["runtime"])
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "wb") as stream:
-        process = subprocess.Popen(command, env=environment(profile), stdin=subprocess.DEVNULL,
+        header = {"profile": profile["id"], "action": action,
+                  "runtime": profile.get("runtime_version"), "dxmt": profile.get("dxmt_version"),
+                  "performance_requested": tuning}
+        stream.write(("# manager " + json.dumps(header) + "\n").encode())
+        stream.flush()
+        process = subprocess.Popen(command, env=environment(profile, tuning), stdin=subprocess.DEVNULL,
                                    stdout=stream, stderr=subprocess.STDOUT,
                                    cwd=profile["prefix"], start_new_session=True)
+        try:
+            code = process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            pass
+        else:
+            if code:
+                raise ManagerError(f"Runtime exited immediately with code {code}. Inspect private log: {log}")
     return process.pid

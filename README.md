@@ -4,13 +4,16 @@ Run Valve's **Windows Steam client with your existing Steam account**, then inst
 and launch Deadlock from that library. This maintained fork aims to make a durable
 unpaid setup easy to test, diagnose and update.
 
-**Status: experimental. Deadlock gameplay is not yet verified by this fork.**
+**Status: experimental. Gameplay has been observed, but startup/exit faults and
+sustained performance remain under investigation.**
 See the [compatibility ledger](docs/COMPATIBILITY.md) for observed results rather
 than inferred compatibility.
 
 The default free candidate is **Highball's Wine 11 build + its paired DXMT build**.
-Steam login, installation and a Direct3D rendering probe work on our M2 Max.
-**The first Deadlock launch crashed; gameplay is not ready.** A Sikarugir Wine 11 + upstream DXMT 0.80 pair remains available for
+Steam login, installation, restart and a Direct3D rendering probe work on our M2 Max.
+The clean installation also reached Deadlock's menu after a failed first launch.
+A local macOS app preview can install Steam without a player-supplied Python.
+A Sikarugir Wine 11 + upstream DXMT 0.80 pair remains available for
 comparison, with a known black Steam login window on this Mac. Official
 CrossOver is an optional comparison provider; the project does not depend on a
 CrossOver trial. Every profile owns a separate Steam environment so runtime
@@ -22,9 +25,7 @@ Place the repository inside `Projects/Games/Deadlock`. Requires Apple Silicon, m
 Rosetta 2 and Python 3.12+. Review [security boundaries](SECURITY.md), then:
 
 ```sh
-python3 bin/deadlock-mac runtime-install
-python3 bin/deadlock-mac profile-create
-python3 bin/deadlock-mac setup
+python3 bin/deadlock-mac bootstrap
 python3 bin/deadlock-mac steam
 ```
 
@@ -42,6 +43,10 @@ credentials. Deadlock's public listing does not currently advertise Steam Cloud;
 verify the in-client options and keep local backups instead of assuming all
 settings sync. [Installation and account guide](docs/INSTALL.md)
 
+The [native app preview](packaging/README.md) bundles Python and calls the same
+manager modules. It is currently a local development build, not a notarized download.
+For controlled performance tests, see the [60 FPS baseline guide](docs/PERFORMANCE.md).
+
 ## Layout
 
 ```text
@@ -53,6 +58,7 @@ Projects/Games/Deadlock/
   DeadlockData/       private profiles and logs
   DeadlockBackups/    local Deadlock data snapshots
   Tools/              optional diagnostic compiler
+  Builds/             local app previews, outside Git
   deadlock-audit-*/   local audit evidence (not published)
 ```
 

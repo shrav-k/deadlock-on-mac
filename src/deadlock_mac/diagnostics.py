@@ -7,6 +7,27 @@ from .runtime import clean_env, environment
 from .storage import ManagerError
 
 
+def power_status():
+    """Read only the power source and low-power flags, not battery identifiers."""
+    if platform.system() != "Darwin":
+        return {"source": "unknown", "low_power_mode": None}
+    try:
+        battery = subprocess.run(["/usr/bin/pmset", "-g", "batt"], capture_output=True,
+                                 text=True, timeout=10, check=True, env=clean_env()).stdout
+        source = "AC Power" if "'AC Power'" in battery else "Battery Power" if "'Battery Power'" in battery else "unknown"
+        settings = subprocess.run(["/usr/bin/pmset", "-g", "custom"], capture_output=True,
+                                  text=True, timeout=10, check=True, env=clean_env()).stdout
+        current, low_power = None, None
+        for line in settings.splitlines():
+            if line.endswith(":"):
+                current = line.strip().removesuffix(":")
+            elif current == source and line.strip().startswith("lowpowermode "):
+                low_power = line.split()[-1] == "1"
+        return {"source": source, "low_power_mode": low_power}
+    except (OSError, subprocess.SubprocessError):
+        return {"source": "unknown", "low_power_mode": None}
+
+
 def engine_dependencies(profile):
     if platform.system() != "Darwin" or profile["provider"] != "wine":
         raise ManagerError("Dependency inspection currently supports free Wine profiles on macOS.")

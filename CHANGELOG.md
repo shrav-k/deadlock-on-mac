@@ -10,6 +10,12 @@
   selected diagnostics and automated tests.
 - Document runtime provenance, licensing limits, account/Cloud behavior, research
   alternatives and an explicit gameplay acceptance gate.
+- Report immediate runtime-loader failures with the private log location.
+- Add a preflight/bootstrap command and a local SwiftUI preview with pinned bundled Python.
+- Add reversible FPS-cap, Wine synchronization and Metal HUD settings, power diagnostics,
+  backed-up display edits and per-process performance-log summaries.
+- Exercise the app's clean installation path through Steam sign-in and a fresh game download;
+  record first-launch failure and a successful normal Steam retry separately.
 
 Forked from `0ximu/deadlock-on-mac` at
 `aedcd5128613b6f94e228d6258840b33fdb53782`. Original history and MIT attribution

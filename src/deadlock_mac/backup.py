@@ -19,7 +19,7 @@ def wine_processes_running():
     result = subprocess.run(["/bin/ps", "-axo", "comm="], capture_output=True,
                             text=True, timeout=15, env=clean_env())
     if result.returncode:
-        raise ManagerError("Cannot check whether Steam/Wine is closed; backup refused.")
+        raise ManagerError("Cannot check whether Steam/Wine is closed; operation refused.")
     # Conservative, read-only check across runtimes. No PID signalling, no command
     # lines or environment blocks stored in reports. Exit other bottles too.
     return any(re.search(r"(?i)(?:^|[/\\])(?:wine(?:64)?(?:-preloader)?|wineserver|steam\.exe|"

@@ -2,7 +2,8 @@
 
 The player-facing target is one signed macOS app: choose a tested runtime, install
 Windows Steam, sign in, install Deadlock, and play. The current deliverable is an
-experimental developer CLI. Successful download, installation or checksum tests
+experimental developer CLI and a local native app preview with bundled Python.
+Successful download, installation or checksum tests
 must not be described as proof that the game works out of the box.
 
 ## Module boundaries
@@ -17,7 +18,11 @@ must not be described as proof that the game works out of the box.
 | `storage.py` | HTTPS downloads, archive validation, immutable installations, integrity checks and atomic state |
 | `backup.py` | Offline, game-only snapshots with a file hash manifest |
 | `diagnostics.py` | Read-only native dependency inspection, with explicit scope and unresolved libraries |
+| `performance.py` | Validated per-profile FPS cap, Wine synchronization and Metal HUD settings |
+| `game_settings.py` | Narrow, offline display edits with backups; preserves quality and render scale |
+| `telemetry.py` | Per-process Metal presentation-interval summaries, excluding other apps and warm-up |
 | `cli.py` | Command orchestration, profile creation and selected diagnostics |
+| `packaging/` | SwiftUI shell, isolated bundled-Python entry point and pinned app build inputs |
 | `tests/native` | Standalone Windows rendering probes, independent of Steam accounts |
 
 Adding another build of an existing Wine family means adding artifact records and
@@ -50,9 +55,11 @@ relocation command; arbitrary live folder moves are not supported yet.
 1. **Developer preview (current):** source checkout, Python 3.12+, pinned free
    components, explicit setup commands and diagnostic evidence. No claim of
    out-of-box gameplay. The current M2 Max game-startup crash blocks that claim.
-2. **Packaged preview:** build a self-contained macOS app/CLI with its own Python
-   runtime so players need no Homebrew, Git, pip or compiler. Publish reproducible
-   packaging inputs, checksums, component licenses and a software bill of materials.
+2. **Packaged preview (local build tested):** a self-contained macOS app/CLI with its own Python
+   runtime so players need no Homebrew, Git, pip or compiler. The app bootstrapped
+   Windows Steam from an empty workspace; the user signed in and installed Deadlock.
+   Public distribution still needs documented
+   build reproducibility, checksums, complete component licenses and a software bill of materials.
    Keep runtime/game downloads separate from the app package.
 3. **Player release:** sign and notarize the app using a project-controlled Apple
    Developer identity, offer update/rollback paths, and pass fresh-install and

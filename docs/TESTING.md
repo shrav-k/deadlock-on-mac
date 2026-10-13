@@ -10,7 +10,9 @@ Unit tests use temporary directories and fake process launches. They cover archi
 path traversal and links, corrupted cached downloads, atomic-write failure,
 concurrent state writers, profile/prefix separation, shell metacharacters in paths,
 environment credential leakage, Steam-only launches, malformed Valve manifests,
-CrossOver signature rejection, and backup exclusions. CI never signs into Steam,
+CrossOver signature rejection, backup exclusions, live-setup refusal, reversible
+performance/display settings and per-process/time-bounded telemetry. CI also
+type-checks the native app source. CI never signs into Steam,
 installs a game or downloads runtime binaries.
 
 ## Native graphics probe
@@ -63,3 +65,6 @@ Record both the requested backend and evidence of the loaded backend. Do not inf
 success merely from an environment variable or from seeing a game process. A result
 on M4 hardware is not an M2 Max result, and a successful match is not a promise that
 a future game/anti-cheat update will work.
+
+See [performance testing](PERFORMANCE.md) for the 60 FPS launch settings, shader
+warm-up, output-versus-render resolution and the limits of Metal HUD samples.
