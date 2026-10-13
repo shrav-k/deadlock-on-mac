@@ -80,21 +80,41 @@ resolution through the game's settings after reaching the menu, and verify it th
 
 ## Establish a baseline
 
-Exit Windows Steam first, then save a 60 FPS limit and the performance HUD:
+After the first game launch has created its settings, close Deadlock, Windows
+Steam and all Wine apps. Save both the renderer's requested limit and the game's
+actual game/menu limits:
 
 ```sh
 python3 bin/deadlock-mac performance --fps-cap 60 --hud on --hud-log on
-python3 bin/deadlock-mac steam
-python3 bin/deadlock-mac launch
+python3 bin/deadlock-mac game-fps --cap 60 --menu-cap 60 --apply
 ```
 
-In the app, use **60 FPS + performance HUD**, then Open Steam → Play. Connect to
-power and check Low Power Mode. In Deadlock, keep **Direct3D 11**: the paired DXMT
-renders through Metal on the Apple GPU. Set in-game and dashboard limits to 60.
-Change resolution in the game's menu after it opens. A successful 1920×1200
-sandbox run was reported on the M2 Max after Game Mode was enabled; it is a useful
-comparison setting, not a guaranteed preset for every Mac. Record the upscaler and
-quality too. Vulkan has not been tested with this setup.
+In the app, use **60 FPS + performance HUD** and **Set game and menu limits to
+60 FPS**. The renderer request alone did not persist those in-game settings.
+
+The verified display setup on our M2 Max's built-in display uses Retina borderless
+at 3024×1964. With Steam/Wine still closed:
+
+```sh
+python3 bin/deadlock-mac retina --set on --apply
+python3 bin/deadlock-mac graphics-preset --mode borderless --width 3024 --height 1964 --apply
+```
+
+These dimensions are specific to that display. Follow the
+[Retina guide and rollback instructions](PERFORMANCE.md#experimental-high-resolution-borderless--retina)
+for another display; external-monitor behavior remains untested. Fullscreen
+1920×1200 still has coverage and focus failures on the tested Mac.
+
+Configure the compatible Game Mode tool below, then use manager **Play** (CLI:
+`launch --game-mode-tool /absolute/path/to/gamepolicyctl`). Confirm the HUD's
+output dimensions and Game Mode On, and both in-game limits at 60. The user
+verified these checks, screen coverage, pointer alignment and Command–Tab after
+a full Steam restart. Gameplay performance at 3024×1964 has not yet been measured.
+
+Connect to power and check Low Power Mode. Keep **Direct3D 11**: the paired DXMT
+renders through Metal on the Apple GPU. Record the upscaler, render scale and
+quality too; output dimensions alone do not establish internal rendering
+resolution. Vulkan has not been tested with this setup.
 
 ## Automatic Game Mode during Play
 

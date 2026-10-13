@@ -78,9 +78,12 @@ python3 bin/deadlock-mac launch --game-mode-tool /absolute/path/to/gamepolicyctl
 ```
 
 The app exposes Retina status/enable/disable under Display settings. This is
-opt-in and experimental. Visible coverage, pointer alignment and Command–Tab have
-passed one user-observed built-in-display test; quit/relaunch and performance
-acceptance remain open. It affects the whole Wine bottle,
+opt-in and experimental. The user confirmed visible coverage, pointer alignment,
+Command–Tab, HUD output of 3024×1964, Game Mode On and both FPS limits at 60 after
+a full Steam restart. In-game Exit Game also closed normally and Game Mode
+restored, although the manager's earlier Exit request timed out. Gameplay testing
+at this resolution was paused before the Mina ability comparison; sustained
+performance and repeated lifecycle acceptance remain open. It affects the whole Wine bottle,
 including Steam, and takes effect on restart. It does not change macOS preferences.
 For CrossOver, use its own Retina control.
 

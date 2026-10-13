@@ -233,6 +233,15 @@ not complete on its own.
 After Steam closed, the saved game/menu caps were still 400/120. Both were changed
 to 60 with an exact configuration backup; the 3024×1964 borderless settings were
 preserved. The engine's requested FPS limit alone was therefore not sufficient
-evidence of the game's saved cap. Verification after relaunch is pending. These
-later runs use Steam-updated game build 25917577; earlier build 25841406 results
-must not be treated as a controlled same-build comparison.
+evidence of the game's saved cap. After the full Steam restart and 14:58 game
+launch, the user confirmed all acceptance checks: full screen coverage, aligned
+pointer clicks, Command–Tab away/back, HUD output of 3024×1964, Game Mode On, and
+both game/menu limits at 60. This supersedes the earlier uncertainty about HUD
+dimensions. A short setup capture averaged approximately 60 presentation FPS;
+it is not a gameplay stress test or a sustained-match result.
+
+The user paused gameplay testing before the Mina Hero Sandbox comparison at
+these settings. Resume that comparison only when requested. Fullscreen coverage
+and focus, manager Exit reliability, external displays and full-match performance
+remain open. These later runs use Steam-updated game build 25917577; earlier build
+25841406 results must not be treated as a controlled same-build comparison.
