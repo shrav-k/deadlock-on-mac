@@ -49,31 +49,42 @@ def pending_trial(workspace):
     return None
 
 
-def game_candidates():
+def process_candidates(executable):
     result = subprocess.run(["/bin/ps", "-ww", "-axo", "pid=,comm="],
                             capture_output=True, text=True, timeout=5, env=clean_env())
     if result.returncode:
-        raise ManagerError("Could not inspect running game processes.")
+        raise ManagerError("Could not inspect running Windows processes.")
     return [int(parts[0]) for line in result.stdout.splitlines()
             if len(parts := line.strip().split(None, 1)) == 2 and parts[0].isdigit()
-            and parts[1].lower().endswith("\\deadlock.exe")]
+            and parts[1].replace("\\", "/").lower().endswith("/" + executable.lower())]
+
+
+def game_candidates():
+    return process_candidates("deadlock.exe")
 
 
 def games_in_prefix(prefix):
+    return processes_in_prefix(prefix, "deadlock.exe", game_candidates())
+
+
+def processes_in_prefix(prefix, executable, candidates=None):
     """Read only cwd, not process environments/Steam credentials, to match a bottle."""
     prefix = Path(prefix).resolve()
     games = {}
-    for pid in game_candidates():
+    for pid in process_candidates(executable) if candidates is None else candidates:
+        before = game_mode.process_identity(pid)
+        if not before:
+            continue
         result = subprocess.run(["/usr/sbin/lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
                                 capture_output=True, text=True, timeout=5, env=clean_env())
         if result.returncode:
             if game_mode.process_identity(pid):
-                raise ManagerError("Could not identify Deadlock's bottle from its working directory.")
+                raise ManagerError(f"Could not identify {executable}'s bottle from its working directory.")
             continue  # Process exited during inspection.
         paths = [Path(line[1:]).resolve() for line in result.stdout.splitlines() if line.startswith("n/")]
         if any(path.is_relative_to(prefix) for path in paths):
             identity = game_mode.process_identity(pid)
-            if identity.lower().endswith("\\deadlock.exe"):
+            if identity == before and identity.replace("\\", "/").lower().endswith("/" + executable.lower()):
                 games[pid] = identity
     return games
 

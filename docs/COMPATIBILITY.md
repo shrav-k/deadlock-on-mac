@@ -245,3 +245,29 @@ these settings. Resume that comparison only when requested. Fullscreen coverage
 and focus, manager Exit reliability, external displays and full-match performance
 remain open. These later runs use Steam-updated game build 25917577; earlier build
 25841406 results must not be treated as a controlled same-build comparison.
+
+## Manager shutdown correction — 2026-10-13
+
+The earlier manager timeout used Wine `taskkill` without `/F`, which posts
+`WM_CLOSE` and reports message delivery even when the application remains open.
+The installed Steam client exposes `app_stop <appid> [force:0|1]`. Replacing the
+window message with `steam.exe -ifrunning +app_stop 1422450 0` closed Deadlock in
+the initial menu-only investigation and let the watcher restore `auto`.
+
+Five subsequent cold-Steam launch/exit cycles passed using the 0.2.0 app's bundled
+CLI. Each cycle verified one running game with Game Mode On, actual game exit,
+restoration to the original `auto` policy, Steam remaining open, normal Windows
+Steam/helper shutdown, and repeated no-op Exit commands. Exit plus restoration
+took approximately three to five seconds. No gameplay input was sent. Private
+evidence is in `DeadlockData/lifecycle-checks/20261013T221750782425Z/`.
+
+This supersedes the failed manager-close path for this tested stack; it does not
+establish every Wine/CrossOver build or hung/crashed-game recovery. Steam commands
+can change with client updates, so the manager verifies actual exit and reports
+timeouts rather than treating command delivery as success. A separate regression
+test covers helpers lingering after the main Steam client has already exited.
+
+The Python suite has 112 passing tests, including shutdown/error/isolation and
+packaging failure cases. Native Swift quit-policy tests pass. Visual testing of
+the new buttons is pending because the Mac was locked when the UI tool connected.
+Gameplay, fullscreen correction and external-display acceptance remain paused.

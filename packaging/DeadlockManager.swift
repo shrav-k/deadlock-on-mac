@@ -3,14 +3,19 @@ import AppKit
 
 @MainActor
 final class ManagerModel: ObservableObject {
-    @Published var workspace = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Projects/Games/Deadlock").path
-    @Published var profile = "highball"
-    @Published var running = false
+    @Published var workspace = UserDefaults.standard.string(forKey: "workspace") ?? FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Projects/Games/Deadlock").path {
+        didSet { UserDefaults.standard.set(workspace, forKey: "workspace") }
+    }
+    @Published var profile = UserDefaults.standard.string(forKey: "profile") ?? "highball" {
+        didSet { UserDefaults.standard.set(profile, forKey: "profile") }
+    }
+    @Published private var lifecycle = ManagerLifecycle()
+    var running: Bool { lifecycle.running }
     @Published var status = "Ready to set up Windows Steam."
     @Published var output = ""
     @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
-    @Published var testingGameMode = false
+    var testingGameMode: Bool { lifecycle.testingGameMode }
     @Published var automaticGameMode = UserDefaults.standard.object(forKey: "automaticGameMode") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automaticGameMode, forKey: "automaticGameMode") }
     }
@@ -36,6 +41,25 @@ final class ManagerModel: ObservableObject {
 
     func stopGameModeTest() { activeProcess?.terminate() }
 
+    func requestQuit() -> ManagerQuitDecision {
+        let decision = lifecycle.requestQuit()
+        switch decision {
+        case .quitNow: break
+        case .waitForOperation:
+            status = "Finishing the current operation before quitting the manager…"
+        case .stopDiagnosticAndWait:
+            status = "Restoring Game Mode before quitting the manager…"
+            stopGameModeTest()
+        }
+        return decision
+    }
+
+    private func finished(success: Bool) {
+        activeProcess = nil
+        let result = lifecycle.finish(success: success)
+        if result.replyToQuit { NSApp.reply(toApplicationShouldTerminate: result.shouldQuit) }
+    }
+
     func play() {
         var arguments = ["launch"]
         if !automaticGameMode { arguments += ["--without-game-mode"] }
@@ -53,9 +77,7 @@ final class ManagerModel: ObservableObject {
     }
 
     func run(_ command: [String], label: String) {
-        guard !running, let resources = Bundle.main.resourceURL else { return }
-        running = true
-        testingGameMode = command.contains("game-mode") && command.contains("--test")
+        guard !running, let resources = Bundle.main.resourceURL, lifecycle.begin(command) else { return }
         status = label
         output = ""
         let selectedWorkspace = workspace
@@ -63,7 +85,7 @@ final class ManagerModel: ObservableObject {
         Task.detached {
             let process = Process()
             process.executableURL = resources.appendingPathComponent("python/bin/python3")
-            process.arguments = ["-I", "-B", resources.appendingPathComponent("launcher.py").path,
+            process.arguments = ["-I", "-B", "-u", resources.appendingPathComponent("launcher.py").path,
                                  "--workspace", selectedWorkspace, "--profile", selectedProfile] + command
             var env: [String: String] = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
             for key in ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL"] {
@@ -76,44 +98,50 @@ final class ManagerModel: ObservableObject {
             process.standardInput = FileHandle.nullDevice
             do {
                 try process.run()
-                await MainActor.run { self.activeProcess = process }
+                await MainActor.run {
+                    self.activeProcess = process
+                    if self.lifecycle.quitPending && self.testingGameMode { process.terminate() }
+                }
                 while true {
                     let data = pipe.fileHandleForReading.availableData
                     if data.isEmpty { break }
                     let text = String(decoding: data, as: UTF8.self)
-                    await MainActor.run { self.output += text }
+                    await MainActor.run {
+                        self.output += text
+                        // Keep a noisy diagnostic from retaining unbounded UI memory.
+                        if self.output.count > 200_000 { self.output = String(self.output.suffix(160_000)) }
+                    }
                 }
                 process.waitUntilExit()
                 let code = process.terminationStatus
                 await MainActor.run {
-                    self.running = false
-                    self.testingGameMode = false
-                    self.activeProcess = nil
                     let messages = ["bootstrap": "Steam installed. Open Steam and allow it to update.",
                                     "steam": "Steam is starting. First startup may take a few minutes before sign-in appears.",
                                     "install": "Install request sent. Complete the download in Steam.",
                                     "launch": "Play request sent. Check the game window.",
                                     "exit": "Deadlock is closed. Steam remains open; check Details for Game Mode restoration.",
+                                    "steam-exit": "Windows Steam is closed. Check Details for Game Mode restoration.",
                                     "performance": "Settings saved. Restart Windows Steam for them to apply.",
                                     "graphics-preset": "Display settings saved with a backup. Verify them in the game.",
                                     "game-mode": "Game Mode operation finished. Check the policy in Details."]
                     self.status = code == 0 ? (messages[command.first ?? ""] ?? "Check complete.")
                         : "This step could not finish. See details below (code \(code))."
+                    self.finished(success: code == 0)
                 }
             } catch {
                 let message = error.localizedDescription
-                await MainActor.run { self.running = false; self.testingGameMode = false; self.activeProcess = nil; self.status = message }
+                await MainActor.run { self.status = message; self.finished(success: false) }
             }
         }
     }
 }
 
 struct ContentView: View {
-    @StateObject private var model = ManagerModel()
+    @ObservedObject var model: ManagerModel
     @State private var showDetails = true
-    @State private var displayMode = "fullscreen"
-    @State private var displayWidth = "1920"
-    @State private var displayHeight = "1200"
+    @State private var displayMode = "borderless"
+    @State private var displayWidth = ""
+    @State private var displayHeight = ""
     var body: some View {
         ScrollView {
         VStack(alignment: .leading, spacing: 18) {
@@ -147,9 +175,16 @@ struct ContentView: View {
                 Button("2. Open Steam") { model.run(["steam"], label: "Opening Steam…") }
                 Button("3. Install Deadlock") { model.run(["install"], label: "Opening Deadlock in Steam…") }
                 Button("Play") { model.play() }
-                Button("Exit Deadlock") { model.run(["exit"], label: "Closing Deadlock normally…") }
                 Spacer()
             }.controlSize(.large).disabled(model.running)
+            HStack {
+                Button("Exit Deadlock") { model.run(["exit"], label: "Asking Steam to close Deadlock…") }.disabled(model.running)
+                Button("Exit Windows Steam") { model.run(["steam-exit"], label: "Closing Deadlock and Windows Steam…") }.disabled(model.running)
+                Spacer()
+                Button("Quit Manager") { NSApp.terminate(nil) }
+            }
+            Text("Exit Windows Steam closes Deadlock first. Quit Manager leaves Steam and the game running; Game Mode still restores when the game exits.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text("Complete Steam Guard in Steam. Cloud support depends on the game; resolve any sync conflicts yourself.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
@@ -239,7 +274,7 @@ struct ContentView: View {
                 }.frame(height: 180)
                     .background(.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
-            Text("Experimental: startup/exit faults and performance are under investigation. This local build is not a signed, notarized player release.")
+            Text("Experimental: display compatibility and sustained performance remain under investigation. This local build is ad-hoc signed, not notarized for public distribution.")
                 .font(.caption).foregroundStyle(.secondary)
         }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }.frame(minWidth: 800, minHeight: 740)
@@ -248,7 +283,47 @@ struct ContentView: View {
 
 @main
 struct DeadlockManagerApp: App {
+    @NSApplicationDelegateAdaptor(ManagerAppDelegate.self) private var appDelegate
+    @StateObject private var model = ManagerModel()
     var body: some Scene {
-        WindowGroup { ContentView() }.windowResizability(.contentMinSize)
+        Window("Deadlock Manager", id: "manager") {
+            ContentView(model: model)
+                .background(WindowAttachment(delegate: appDelegate))
+                .onAppear { appDelegate.model = model }
+        }.windowResizability(.contentMinSize)
+    }
+}
+
+@MainActor
+final class ManagerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    weak var model: ManagerModel?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model else { return .terminateNow }
+        return model.requestQuit() == .quitNow ? .terminateNow : .terminateLater
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        NSApp.terminate(nil)
+        return false // Keep the window visible until an active operation finishes.
+    }
+}
+
+private struct WindowAttachment: NSViewRepresentable {
+    let delegate: ManagerAppDelegate
+    func makeNSView(context: Context) -> AttachedView { AttachedView(delegate: delegate) }
+    func updateNSView(_ nsView: AttachedView, context: Context) {}
+
+    final class AttachedView: NSView {
+        let managerDelegate: ManagerAppDelegate
+        init(delegate: ManagerAppDelegate) {
+            managerDelegate = delegate
+            super.init(frame: .zero)
+        }
+        required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.delegate = managerDelegate
+        }
     }
 }

@@ -77,7 +77,30 @@ architectures of `tests/native/device_notify_probe.c`, checking exact Windows
 error codes and valid-handle cleanup. `--graphics` also runs the existing rendering
 probe. [WINE-HOTFIX.md](WINE-HOTFIX.md) documents the pinned source backport.
 
-The manager suite additionally covers normal Exit requests, pending restoration,
-profile isolation, hotfix corruption/rollback, and benchmark log rotation, PID
-filtering and metadata privacy. Native probes are opt-in local checks, not run by
-credential-free unit CI.
+The manager suite additionally covers Steam app-stop requests, actual process exit,
+pending/failed restoration, missing clients, changed/reused PIDs, profile isolation,
+Steam helper shutdown, timeouts, idempotence, hotfix corruption/rollback, and
+benchmark log rotation, PID filtering and metadata privacy. Packaging tests inject
+build failures and concurrent outputs to verify incomplete apps are not published.
+macOS CI compiles/runs `tests/native/manager_lifecycle_test.swift` against the same
+quit policy used by the UI (idle, active operation, failure and diagnostic cleanup).
+Native Wine probes are opt-in local checks, not run by credential-free unit CI.
+
+## Menu-only lifecycle checks (no gameplay)
+
+With an installed, signed-in profile and Deadlock closed:
+
+```sh
+python3 packaging/check_lifecycle.py --workspace .. \
+  --game-mode-tool /absolute/path/to/gamepolicyctl \
+  --manager-app '../Builds/Deadlock Manager.app' --cycles 5
+```
+
+This explicitly launches Deadlock through Steam, waits briefly without sending
+input, then tests Exit Deadlock, Game Mode restoration, Steam remaining open,
+Exit Windows Steam and repeated no-op exits. Every cycle starts Steam cold.
+Omit `--manager-app` to test the source CLI. It neither enters a sandbox/match nor
+changes display/performance settings. Private reports/logs live under
+`DeadlockData/lifecycle-checks/`. A failure stops the run and attempts only normal
+game closure; no force-kill or automatic prompt confirmation is used. A process
+surviving startup is not proof of correct visuals or gameplay compatibility.

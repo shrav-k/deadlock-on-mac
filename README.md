@@ -47,6 +47,7 @@ python3 bin/deadlock-mac install
 python3 bin/deadlock-mac launch
 python3 bin/deadlock-mac doctor
 python3 bin/deadlock-mac exit
+python3 bin/deadlock-mac steam-exit
 ```
 
 Steam manages game downloads, updates, entitlement, friends and any supported
@@ -115,5 +116,8 @@ CodeWeavers, WineHQ or Sikarugir. Original upstream attribution is retained in
 The [quality protocol](docs/QUALITY.md) defines runtime promotion gates, repeated
 sandbox comparisons and real-match recording. The [Wine exit hotfix guide](docs/WINE-HOTFIX.md)
 covers the pinned source build, regression probes and reversible activation.
-The Exit Deadlock button requests normal shutdown and verifies Game Mode restoration;
-it does not turn a crash or timeout into a successful test.
+**Exit Deadlock** asks Steam to stop the game normally and verifies actual exit and
+Game Mode restoration. **Exit Windows Steam** then shuts down that profile's client
+and waits for its helpers. **Quit Manager** (also Command–Q or closing its window)
+leaves Steam/game running and keeps the detached Game Mode watcher active. A crash,
+timeout or pending restoration is reported as a failure rather than a successful exit.

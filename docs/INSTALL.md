@@ -287,8 +287,26 @@ a second copy of current data, exit Steam, and restore only the files you intend
 ## Exit, recover display settings, and verify hotfix status
 
 Use **Exit Deadlock** in the app or `python3 bin/deadlock-mac exit`. This requests
-normal closure and leaves Windows Steam available to sync. A Wine debugger or
+Steam's non-forced app stop, verifies the game process has ended and waits for the
+previous Game Mode policy to be restored. It leaves Windows Steam available to
+sync. The earlier Wine close-window message could be accepted without the game
+exiting; the manager no longer uses that path. A Wine debugger or
 unresponsive game is reported as a failure; it is not automatically force-killed.
+
+Use **Exit Windows Steam** or `python3 bin/deadlock-mac steam-exit` to close
+Deadlock first, then ask that profile's Windows Steam to shut down normally.
+The manager waits for Steam and its helpers; it does not dismiss sync/download
+prompts or affect native Mac Steam. A failed game exit stops the Steam-shutdown
+sequence so the error remains visible. Repeating either command after closure
+does not reopen Steam or Deadlock.
+
+**Quit Manager**, Command–Q, and closing the manager's window exit only the
+manager. Steam/game stay running and the detached watcher still restores Game
+Mode on game exit. If an operation is active, quitting waits for it to finish;
+a timed Game Mode diagnostic is stopped and restored first. An operation failure
+keeps the manager open for recovery. The app remembers the workspace, profile
+and chosen Apple tool across launches.
+
 Use `wine-hotfix` to inspect the verified overlay, or `wine-hotfix --set on/off`
 with Steam closed. See [the build/rollback procedure](WINE-HOTFIX.md).
 

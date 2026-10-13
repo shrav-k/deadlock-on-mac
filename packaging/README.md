@@ -17,10 +17,24 @@ hashes, compiler version and certificate hash in `Contents/Resources/build-input
 and writes an adjacent file-hash manifest. This is recorded provenance, not a claim
 of bit-for-bit reproducible Swift binaries.
 
+Builds are staged in a temporary sibling directory. The builder exercises the
+bundled isolated CLI, checks its version against the bundle, then signs and verifies
+the app before publishing the output. Failed staging is removed; an existing app
+or output symlink is never replaced. The GUI uses unbuffered CLI output and bounds
+its in-memory diagnostic text. Keep downloaded runtime caches outside the app.
+
 Open the resulting app. Select the workspace, then **Set up Steam → Open Steam →
 Install Deadlock → Play**. Steam owns sign-in, Steam Guard, game installation and
 updates. First Steam startup can take several minutes. Performance changes require
 Windows Steam to be closed; configure resolution after the game has run once.
+
+**Exit Deadlock** uses Steam's non-forced stop command and verifies exit/restoration.
+**Exit Windows Steam** closes the game first, then shuts down the client and waits
+for its helpers. **Quit Manager**, Command–Q and the window close button quit only
+the manager. Quitting waits for an active operation to complete and restores any
+timed diagnostic; a failed operation keeps the window open. The app has one manager
+window and remembers the selected workspace/profile. The game watcher remains
+independent of the GUI's lifetime.
 
 The **Game Mode** panel selects a compatible Apple-signed `gamepolicyctl`. With
 **Enable during Play** checked (the default), Play keeps Game Mode on for the

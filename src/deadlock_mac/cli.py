@@ -199,6 +199,7 @@ def main(argv=None):
         print(f"Error loading runtime catalog: {exc}", file=sys.stderr)
         return 1
     parser = argparse.ArgumentParser(description="Run Deadlock through your Steam account on macOS.")
+    parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--workspace", type=Path, default=REPO.parent,
                         help="Deadlock workspace folder; runtimes, bottles and private state live here")
     parser.add_argument("--profile", default=runtime_catalog["default"])
@@ -215,6 +216,7 @@ def main(argv=None):
     sub.add_parser("runtimes", help="List available runtime combinations and known compatibility limits")
     sub.add_parser("setup", help="Initialize the free profile and install Windows Steam")
     sub.add_parser("exit", help="Close Deadlock normally, leave Steam open, and verify Game Mode restoration")
+    sub.add_parser("steam-exit", help="Close Deadlock, restore Game Mode, then shut down this profile's Windows Steam")
     p = sub.add_parser("wine-hotfix", help="Verify, enable or roll back the pinned exit fix; Steam must be closed to change it")
     p.add_argument("--set", choices=("on", "off"))
     p = sub.add_parser("benchmark", help="Start, mark or finish a private gameplay measurement")
@@ -320,7 +322,7 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "steam-exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps"):
             profile = load_profile(workspace, args.profile)
         if args.command == "runtime-dependencies":
             result = engine_dependencies(profile)
@@ -382,10 +384,11 @@ def main(argv=None):
                 setup(workspace, profile)
             elif args.command == "backup":
                 print(snapshot(profile, workspace / "DeadlockBackups"))
-            elif args.command == "exit":
+            elif args.command in ("exit", "steam-exit"):
                 logs = private_dir(workspace / "DeadlockData/logs" / args.profile)
-                print(game_exit.close(workspace, profile, logs / f"exit-{timestamp()}.log",
-                                      report=lambda text: print(text, flush=True)))
+                action = game_exit.close if args.command == "exit" else game_exit.close_steam
+                print(action(workspace, profile, logs / f"{args.command}-{timestamp()}.log",
+                             report=lambda text: print(text, flush=True)))
             else:
                 logs = private_dir(workspace / "DeadlockData/logs" / args.profile)
                 log = logs / f"{args.command}-{timestamp()}.log"

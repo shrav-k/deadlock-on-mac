@@ -143,15 +143,24 @@ def launch_command(profile, action):
     return [str(wine_binary(profile)), str(steam), URIS[action]]
 
 
-def exit_command(profile):
-    # Wine taskkill without /F posts WM_CLOSE. Never kill Steam or the wineserver.
-    arguments = ["taskkill.exe", "/IM", "deadlock.exe"]
+def steam_control_command(profile, action):
+    """Ask the selected Windows Steam client to stop its app or shut down normally."""
+    if action not in ("game", "steam"):
+        raise ManagerError("Unsupported Steam shutdown action.")
+    # app_stop's explicit 0 means non-forced. -ifrunning avoids starting a client
+    # if it exits between process inspection and delivery of this command.
+    arguments = [str(steam_path(profile)), "-ifrunning"]
+    arguments += ["+app_stop", APP_ID, "0"] if action == "game" else ["-shutdown"]
     if profile["provider"] == "crossover":
         cxstart = Path(profile["runtime"]) / "Contents/SharedSupport/CrossOver/bin/cxstart"
         if not cxstart.is_file():
             raise ManagerError("CrossOver cxstart is missing.")
         return [str(cxstart), "--bottle", profile["prefix"], *arguments]
     return [str(wine_binary(profile)), *arguments]
+
+
+def exit_command(profile):
+    return steam_control_command(profile, "game")
 
 
 def start(profile, action, log, tuning=None):

@@ -187,6 +187,23 @@ class GameSessionTests(unittest.TestCase):
         with patch.object(game_session.subprocess, 'Popen', side_effect=spawn):
             self.assertEqual(game_session.launch_session(self.root, 'highball', Tool.path, log)['watcher_pid'], 123)
 
+    def test_process_candidates_include_windows_paths_but_not_native_steam(self):
+        rows = '1 /Applications/Steam.app/Contents/MacOS/steam_osx\n2 C:\\Steam\\steam.exe\n3 /bottle/drive_c/Steam/steam.exe\n4 /bottle/steamwebhelper.exe\n'
+        with patch.object(game_session.subprocess, 'run', return_value=Mock(returncode=0, stdout=rows)):
+            self.assertEqual(game_session.process_candidates('steam.exe'), [2, 3])
+
+    def test_prefix_inspection_rejects_pid_reused_during_lsof(self):
+        result = Mock(returncode=0, stdout='n' + self.profile['prefix'] + '\n')
+        with patch.object(game_session.subprocess, 'run', return_value=result), \
+                patch.object(game_mode, 'process_identity', side_effect=['old /Steam/steam.exe', 'new /Steam/steam.exe']):
+            self.assertEqual(game_session.processes_in_prefix(self.profile['prefix'], 'steam.exe', [42]), {})
+
+    def test_prefix_inspection_failure_does_not_assume_process_is_safe(self):
+        with patch.object(game_session.subprocess, 'run', return_value=Mock(returncode=1)), \
+                patch.object(game_mode, 'process_identity', return_value='alive /Steam/steam.exe'), \
+                self.assertRaisesRegex(ManagerError, 'Could not identify'):
+            game_session.processes_in_prefix(self.profile['prefix'], 'steam.exe', [42])
+
     def test_duplicate_worker_cannot_change_policy_or_launch_again(self):
         response = self.root / 'response.json'
         with lock(self.root), patch.object(game_session, 'state_directory', return_value=self.root), \

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — development
+
+- Replace the unreliable Wine close-window request with Steam's non-forced
+  app-specific stop and verify actual game exit plus Game Mode restoration.
+- Add Exit Windows Steam with game-first shutdown, helper-process checks and
+  idempotent no-op exits; preserve native Steam and unrelated profiles.
+- Add explicit Quit Manager and a single-window lifecycle that waits for active
+  operations and restores timed diagnostics before quitting.
+- Persist workspace/profile selection, stream unbuffered output, bound UI log
+  memory and remove the laptop-specific fullscreen resolution default.
+- Stage app builds transactionally, smoke-test bundled CLI/version before signing,
+  and test packaging failures and the Swift quit policy in automation.
+- Add an opt-in menu-only lifecycle harness; gameplay/external-display acceptance
+  remains paused and separately tracked.
+
 ## 0.1.0 — development
 
 - Replace the original CrossOver extraction installer with a Steam-first manager.

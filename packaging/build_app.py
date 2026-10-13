@@ -7,6 +7,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
@@ -16,9 +17,23 @@ from deadlock_mac import hotfix
 
 
 def build(output, downloads, wine_hotfix=None):
+    """Publish a complete, verified build; failed staging never replaces an app."""
     output = Path(output).expanduser().absolute()
-    if output.exists() or output.suffix != ".app":
+    if output.exists() or output.is_symlink() or output.suffix != ".app":
         raise SystemExit("Choose a new output path ending in .app; existing builds are preserved.")
+    private_dir(output.parent)
+    with tempfile.TemporaryDirectory(prefix=".deadlock-build-", dir=output.parent) as temporary:
+        staged = Path(temporary) / output.name
+        build_staged(staged, downloads, wine_hotfix)
+        if output.exists() or output.is_symlink():
+            raise SystemExit("Output appeared during the build; it was left unchanged.")
+        staged.rename(output)
+        staged.with_suffix(".sha256.json").replace(output.with_suffix(".sha256.json"))
+    print(output)
+    print("Local preview built. No public release or notarization was performed.")
+
+
+def build_staged(output, downloads, wine_hotfix=None):
     lock = json.loads((REPO / "packaging/python-lock.json").read_text())
     archive = download(lock["url"], lock["sha256"], Path(downloads) / lock["filename"])
     resources = private_dir(output / "Contents/Resources")
@@ -50,12 +65,21 @@ def build(output, downloads, wine_hotfix=None):
     info = {"CFBundleIdentifier": "dev.shrav-k.deadlock-manager", "CFBundleName": "Deadlock Manager",
             "CFBundleDisplayName": "Deadlock Manager", "CFBundleExecutable": "DeadlockManager",
             "CFBundlePackageType": "APPL", "CFBundleShortVersionString": __version__,
-            "CFBundleVersion": "1", "LSMinimumSystemVersion": "15.0", "NSHighResolutionCapable": True,
+            "CFBundleVersion": __version__, "LSMinimumSystemVersion": "15.0", "NSHighResolutionCapable": True,
+            "LSApplicationCategoryType": "public.app-category.utilities",
             "NSMicrophoneUsageDescription": "Deadlock can use your microphone for in-game voice chat when you enable it."}
     with (output / "Contents/Info.plist").open("wb") as stream:
         plistlib.dump(info, stream)
     subprocess.run(["/usr/bin/xcrun", "swiftc", "-parse-as-library", "-O", "-target", "arm64-apple-macos15.0",
-                    str(REPO / "packaging/DeadlockManager.swift"), "-o", str(macos / "DeadlockManager")], check=True)
+                    str(REPO / "packaging/ManagerLifecycle.swift"), str(REPO / "packaging/DeadlockManager.swift"),
+                    "-o", str(macos / "DeadlockManager")], check=True)
+    # Exercise the same isolated entry point the UI will run before signing it.
+    subprocess.run([str(resources / "python/bin/python3"), "-I", "-B", str(resources / "launcher.py"), "--help"],
+                   check=True, stdout=subprocess.DEVNULL, timeout=30)
+    version = subprocess.check_output([str(resources / "python/bin/python3"), "-I", "-B",
+                                      str(resources / "launcher.py"), "--version"], text=True, timeout=30).strip()
+    if version != __version__:
+        raise SystemExit("Bundled manager version differs from the app bundle version.")
     inputs = {"manager_version": __version__, "python": lock, "certificates_sha256": sha256(certificate),
               "wine_hotfix": hotfix.specification() if wine_hotfix is not None else None,
               "swift": subprocess.check_output(["/usr/bin/xcrun", "swiftc", "--version"], text=True).strip(),
@@ -73,8 +97,6 @@ def build(output, downloads, wine_hotfix=None):
     manifest = {str(p.relative_to(output)): sha256(p) for p in sorted(output.rglob("*"))
                 if p.is_file() and not p.is_symlink()}
     output.with_suffix(".sha256.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(output)
-    print("Local preview built. No public release or notarization was performed.")
 
 
 if __name__ == "__main__":

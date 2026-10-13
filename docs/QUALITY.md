@@ -11,12 +11,12 @@ real test case; keep authentication, Wine and renderer adapters separate.
 
 | Layer | Required evidence | Current automation |
 | --- | --- | --- |
-| Manager | Safe extraction/downloads, state isolation, rollback, lifecycle/recovery, telemetry filtering | Python unit suite on macOS/Linux, Python 3.12/3.13; Swift type-check |
+| Manager | Safe extraction/downloads, state isolation, rollback, lifecycle/recovery, telemetry filtering | Python unit suite on macOS/Linux, Python 3.12/3.13; Swift type-check and quit-policy tests |
 | Build/provenance | Pinned source/toolchain/patches, ABI, hashes, licenses | Reviewed sechost overlay recipe; full engine reproduction still open |
 | Windows APIs | Valid/invalid device handles in 32/64-bit, correct errors, no unhandled fault | Native notification probes |
 | Rendering | Hardware adapter, D3D11 device/swapchain, repeated present | Native 120-frame probe; not a shader correctness suite |
 | Steam | Fresh install, update, login/Guard, library, download, cold/warm restart | Manual acceptance using Valve UI |
-| Lifecycle | Ten normal quit/relaunch cycles, five manager Exit cycles, no debugger, exact Game Mode restoration | Automated watcher logic; live cycle results recorded separately |
+| Lifecycle | Ten normal quit/relaunch cycles, five manager Exit cycles, no debugger, exact Game Mode restoration | Automated watcher/exit logic and opt-in menu-only `check_lifecycle.py`; live results recorded separately |
 | Input/display/audio | Mouse capture, keyboard/controller, focus, minimize, window modes, display scaling, audio/voice | Manual matrix; fullscreen regression currently open |
 | Persistence | Supported Cloud sync verified in Steam, local backup and restore drill | Backup unit tests; full live restore drill open |
 | Performance | Controlled repeated sandbox sequence plus full-match observation | Marked Metal HUD capture and frame-time statistics |
@@ -120,6 +120,15 @@ quit, relaunch and restoration of the desktop. Record requested and actual outpu
 sizes plus display identity without serial numbers. Test built-in and external
 displays separately, then primary-display changes, mixed refresh rates and
 connect/disconnect recovery when that hardware is available.
+
+External-display use is the primary target for the next user gameplay session.
+Record connection type, macOS primary display, scaling, refresh, requested/output
+dimensions and internal render scale. Include lid-open/lid-closed use where
+applicable, launching on the external primary display, Command–Tab, quit/relaunch,
+and unplug/reconnect recovery. These are pending hardware acceptance checks;
+the built-in-display Retina result does not qualify an external display. The
+manager defaults its display editor to borderless with empty dimensions, so it
+cannot silently apply this laptop's resolution to a different monitor.
 
 `tests/native/fullscreen_probe.c` exercises DXGI mode matching, fullscreen state,
 resize, presentation, client/window/desktop geometry and restore. It creates only
