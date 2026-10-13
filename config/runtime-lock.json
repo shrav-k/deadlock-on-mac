@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "reviewed": "2026-10-13",
+  "artifacts": {
+    "highball-wine-20261006": {
+      "url": "https://github.com/gauthierpiarrette/highball-engine/releases/download/engine-wine-11.0-20261006T161716Z-0021-es2-compat/engine-wine-11.0-20261006T161716Z-0021-es2-compat.tar.gz",
+      "sha256": "51355c786168c5c84eec51e3bc364c8a1acd87437e1418b27887a51d42a5657b",
+      "filename": "highball-engine-20261006.tar.gz",
+      "root": "engine",
+      "provenance": "Highball engine release asset digest; matches Highball x64-crossover26.3-r23 manifest",
+      "source": "https://github.com/gauthierpiarrette/highball-engine/tree/ac5cc83bb7d90b8fcca8e60a4a37fce2b9ee1d81",
+      "license": "LGPL-2.1-or-later Wine from published CrossOver sources, not the commercial CrossOver runtime",
+      "status": "experimental; published source and patches, independent rebuild not performed"
+    },
+    "dxmt-highball-a444716": {
+      "url": "https://github.com/gauthierpiarrette/highball-engine/releases/download/dxmt-highball-20260930T161516Z-a444716/dxmt-highball-20260930T161516Z-a444716.tar.gz",
+      "sha256": "96feaf5d98d3c6cdc3edea9503e2891d435df8d5bfdf7d3f6998a56ec62bbd58",
+      "filename": "dxmt-highball-a444716.tar.gz",
+      "root": "highball",
+      "provenance": "Highball x64-crossover26.3-r23 manifest",
+      "source": "https://github.com/gauthierpiarrette/dxmt/tree/a44471614f7cf4817e4eee717993eb19e35184b9",
+      "license": "LGPL-2.1-or-later per source LICENSE (Highball manifest incorrectly says MIT)",
+      "status": "Only pair with the Highball Wine remote-layer patches"
+    },
+    "sikarugir-support-1.0.21": {
+      "url": "https://github.com/Sikarugir-App/Template/releases/download/v1.0/Template-1.0.21.tar.xz",
+      "sha256": "bbe996e4e4375318485953d0c7818b7b4b0a4dc1f13303bcc584f99f7602f78d",
+      "filename": "Template-1.0.21.tar.xz",
+      "root": "Template-1.0.21.app/Contents/Frameworks",
+      "include": "Template-1.0.21.app/Contents/Frameworks",
+      "exclude": ["Template-1.0.21.app/Contents/Frameworks/renderer", "Template-1.0.21.app/Contents/Frameworks/SikarugirSdk.framework"],
+      "provenance": "Sikarugir-App/Template GitHub release asset digest",
+      "status": "Only support libraries are extracted. Wrapper executables and all bundled renderers, including D3DMetal, are excluded."
+    },
+    "sikarugir-wine-11.0_1": {
+      "url": "https://github.com/Sikarugir-App/Engines/releases/download/v1.0/WS12WineSikarugir11.0_1.tar.xz",
+      "sha256": "67e29fb3d74f363af39c69ba11f9b13a79812c5db07cf4748672658e4a200a0e",
+      "filename": "WS12WineSikarugir11.0_1.tar.xz",
+      "root": "wswine.bundle",
+      "provenance": "Sikarugir-App/Engines GitHub release asset digest",
+      "source": "https://github.com/Sikarugir-App/wine",
+      "status": "experimental; exact binary-to-source reproducibility not established"
+    },
+    "dxmt-0.80": {
+      "url": "https://github.com/3Shain/dxmt/releases/download/v0.80/dxmt-v0.80-builtin.tar.gz",
+      "sha256": "8f260e36b5739e68f3bad613381441385c4dc7b85b78ba8de653d5a6a264529d",
+      "filename": "dxmt-v0.80-builtin.tar.gz",
+      "root": "v0.80",
+      "provenance": "3Shain/dxmt GitHub release asset digest",
+      "source": "https://github.com/3Shain/dxmt/tree/v0.80",
+      "license": "MIT at v0.80; subsequent development changed to LGPL-2.1-or-later"
+    },
+    "steam-setup": {
+      "url": "https://cdn.fastly.steamstatic.com/client/installer/SteamSetup.exe",
+      "sha256": "7d3654531c32d941b8cae81c4137fc542172bfa9635f169cb392f245a0a12bcb",
+      "filename": "SteamSetup.exe",
+      "provenance": "Locally observed SHA-256 from Valve CDN on 2026-10-13; mutable vendor URL",
+      "license": "Valve proprietary; downloaded locally, never redistributed by this repository"
+    }
+  }
+}
