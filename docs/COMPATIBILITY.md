@@ -8,7 +8,7 @@ Keep observed results distinct from upstream claims. Last updated 2026-10-13.
 | Same Mac; Wine Sikarugir 11.0_1 + DXMT 0.80 | Steam installs and self-updates | Login UI stays black, including software rendering | D3D11 probe passes; game not tested | Not tested |
 | Same Mac; official CrossOver 26.3.0 | App signature and notarization verified; trial opens | Not yet tested | Not yet tested | Not yet tested |
 
-Manager: 39 automated tests pass locally on Python 3.13.2. These are not game
+Manager: 50 automated tests pass locally on Python 3.13.2. These are not game
 compatibility tests. The CrossOver trial started 2026-10-13; no purchase was made.
 
 Both free-runtime probes reported Apple M2 Max, feature level 11.0, successful
@@ -101,6 +101,33 @@ The installed binary's disassembly lacks these guards. A source backport or engi
 upgrade is a candidate for a separate runtime test; it has not been applied or
 proven to resolve Deadlock's startup/exit behavior. Do not mix an arbitrary newer
 `sechost.dll` into the current runtime.
+
+The subsequent run applied 1512×982 fullscreen in the game's settings while
+preserving the approximately 73% scale and 60 FPS cap. The user initially reported
+a crash, then corrected it to minimization. The pasted debugger report belonged to
+the previous game's exit fault; the current game remained running without a new
+fatal exception. Its settings enabled minimize-on-focus-loss. After repeating
+Mina's ultimate, the user reported a low of **51 FPS with stutter**, and Game Mode
+remained off. Shader caches were warmer in this second run, so this is not an
+isolated causal measurement of fullscreen versus borderless. It still does not
+meet the steady-60 target. A lower-render-scale comparison was proposed but not
+performed; testing switched to Game Mode.
+
+Later screenshots showed advanced FSR2 (TAA) at 1.5×, AO off, medium shadows and
+textures, low fog, and post-process bloom on. Saved configuration values can lag
+the live UI. The user set both in-game and dashboard FPS limits to 60 (the UI's
+minimum), reporting little improvement from that change alone.
+
+On the same running game, Apple's compatible, signature-verified `gamepolicyctl`
+temporarily forced the system-wide Game Mode policy on. The tool, macOS service
+log and user-observed Metal HUD all confirmed activation. At approximately 12:47
+Pacific, the user reported **Mina's bat ultimate staying around 60 FPS, with the
+earlier stutter gone**. Renderer and output resolution were unchanged for this
+comparison. This remains a short, user-observed sandbox result with a warmer cache,
+not a controlled causal benchmark or sustained-match/1080p acceptance. The mixed
+HUD interval retained focus gaps and some intervals above 16.67 ms; it does not
+establish perfect frame pacing. The optional bounded diagnostic is documented in
+[PERFORMANCE.md](PERFORMANCE.md). Automatic per-game activation remains unimplemented.
 
 For each live result add: date, macOS/chip/RAM, engine and graphics versions,
 Deadlock build ID, resolution/settings, test duration, what worked, what failed,

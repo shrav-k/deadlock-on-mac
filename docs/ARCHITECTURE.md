@@ -20,6 +20,7 @@ must not be described as proof that the game works out of the box.
 | `diagnostics.py` | Read-only native dependency inspection, with explicit scope and unresolved libraries |
 | `performance.py` | Validated per-profile FPS cap, Wine synchronization and Metal HUD settings |
 | `game_settings.py` | Narrow, offline display edits with backups; preserves quality and render scale |
+| `game_mode.py` | Optional Apple-tool status, bounded system-wide Game Mode tests and recovery receipts |
 | `telemetry.py` | Per-process Metal presentation-interval summaries, excluding other apps and warm-up |
 | `cli.py` | Command orchestration, profile creation and selected diagnostics |
 | `packaging/` | SwiftUI shell, isolated bundled-Python entry point and pinned app build inputs |
@@ -70,6 +71,13 @@ Do not bundle the commercial CrossOver engine, Steam, Deadlock, credentials or
 Apple's separately licensed D3DMetal. Redistribution of LGPL components needs the
 corresponding source and license obligations satisfied. Packaging must not silently
 change a user's runtime, prefix, Steam account or Cloud-conflict decision.
+
+Game Mode remains an optional capability, independent of the Wine provider. Do
+not bundle a copied Apple developer executable or make Xcode a normal player
+prerequisite. Check the signature and actual tool compatibility, then retain the
+ordinary Steam launch when diagnostics are unavailable. Automatic native game
+identity/fullscreen integration and a supported distribution route must be
+validated before Game Mode can become part of the default Play flow.
 
 ## Release gates
 

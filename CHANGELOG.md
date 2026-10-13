@@ -16,6 +16,8 @@
   backed-up display edits and per-process performance-log summaries.
 - Exercise the app's clean installation path through Steam sign-in and a fresh game download;
   record first-launch failure and a successful normal Steam retry separately.
+- Add optional Apple-signed Game Mode tool diagnostics, bounded comparisons and
+  interrupted-test recovery; record the user-observed Mina sandbox improvement.
 
 Forked from `0ximu/deadlock-on-mac` at
 `aedcd5128613b6f94e228d6258840b33fdb53782`. Original history and MIT attribution

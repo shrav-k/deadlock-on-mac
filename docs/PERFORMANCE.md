@@ -77,6 +77,73 @@ Windows fullscreen setting under Wine does not establish that it activated.
 Confirm in the HUD/menu rather than assuming a performance or temperature benefit.
 See [Apple's Game Mode requirements](https://support.apple.com/en-mide/105118).
 
+Fullscreen can minimize when focus moves to another application: the tested game
+configuration enabled `setting.fullscreen_min_on_focus_loss`. A minimized window
+is not evidence of a crash. Match any Wine error report to the current Windows
+process ID; a debugger from a prior exit can remain visible after another game
+launch. Loading/minimization gaps also make whole-session average FPS misleading.
+
+## Optional Game Mode diagnostic
+
+On the tested M2 Max, macOS classified the Wine game as an anonymous process,
+Command–Esc did not open Apple's Game Overlay, and the Metal HUD showed Game Mode
+off even after selecting fullscreen in Deadlock. An Apple-signed `gamepolicyctl`
+compatible with macOS 26 enabled Game Mode; both its status and the in-game HUD
+confirmed it. The user then reported Mina's ultimate staying around 60 FPS with
+the earlier stutter gone. This is a useful short sandbox result, not a sustained
+match benchmark or proof that a Wine process receives every per-game priority.
+
+The optional CLI can inspect the Apple tool selected by Xcode:
+
+```sh
+python3 bin/deadlock-mac game-mode
+```
+
+Normal Steam/game launch does not require this tool or Xcode. An older tool can
+fail before execution on a newer macOS: Xcode 15's tool failed to load a GamePolicy
+symbol on our macOS 26 machine. Use a compatible Apple developer-tool installation;
+an explicit `--tool /absolute/path/to/gamepolicyctl` is also supported. The manager
+checks Apple's code signature and tool identifier before executing it, rejects
+unknown status formats, and neither downloads nor distributes Apple's binary.
+
+For an explicit comparison, supply the **native PID of the running Deadlock**:
+
+```sh
+python3 bin/deadlock-mac game-mode --test-pid 12345 --seconds 300
+```
+
+This changes a **system-wide policy**, not an individual game's preference. Start
+only with automatic policy and run one test at a time. The command stays running
+and restores automatic policy when the PID exits/changes, the timer expires, or
+it receives Ctrl-C, SIGTERM or SIGHUP. The limit is 15 minutes. Keep the renderer,
+resolution and quality unchanged; confirm Game Mode in the HUD and repeat the same
+ability sequence. This is deliberately separate from normal Play and does not
+modify Wine, Steam or game files.
+
+Recovery is recorded before enabling in `DeadlockData/game-mode-test.json`.
+An uncatchable process kill, power loss, or Apple-service failure can prevent
+automatic cleanup. After such an interruption, use:
+
+```sh
+python3 bin/deadlock-mac game-mode --restore
+```
+
+Supply the same compatible `--tool` path if needed. Restoration preserves a later
+explicit `off` or `auto` choice; another actor setting `on` cannot be distinguished
+from this test's override. A pending recovery blocks a new test. Do not infer
+successful restoration from process exit alone—check the reported policy.
+
+For automatic per-game activation, the remaining work is Wine app identity and
+native fullscreen integration. Adding game metadata only to the manager's UI does
+not establish that the Steam-launched child game becomes eligible. See
+[Apple's game identification guidance](https://developer.apple.com/forums/thread/739387)
+and [Game Mode adoption](https://developer.apple.com/videos/play/wwdc2025/209/).
+
+Keep **Direct3D 11 with DXMT** for this comparison. It already renders through
+Metal on the Apple GPU; Game Mode is separate from GPU acceleration. Vulkan is a
+different backend requiring its own validated Wine/MoltenVK setup and measurements.
+No Vulkan comparison has been performed here.
+
 Sources: [paired DXMT configuration](https://github.com/gauthierpiarrette/dxmt/blob/a44471614f7cf4817e4eee717993eb19e35184b9/dxmt.conf),
 [Apple Metal HUD](https://developer.apple.com/documentation/xcode/monitoring-your-metal-apps-graphics-performance),
 [upstream Deadlock reports](https://github.com/gauthierpiarrette/highball-db/blob/main/db/games/deadlock.json).

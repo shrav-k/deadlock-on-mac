@@ -17,6 +17,7 @@ from .catalog import REPO, artifacts, catalog, components, runtime_set
 from .diagnostics import engine_dependencies, power_status
 from . import performance
 from . import game_settings
+from . import game_mode
 from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
@@ -222,6 +223,12 @@ def main(argv=None):
     p.add_argument("--warmup-seconds", type=float, default=0)
     p.add_argument("--start-time", help="Local ISO time when the gameplay segment started (no UTC offset)")
     p.add_argument("--end-time", help="Exclusive local ISO end time, to exclude later menus or settings")
+    p = sub.add_parser("game-mode", help="Optional Apple Game Mode status or bounded system-wide diagnostic test")
+    p.add_argument("--tool", type=Path, help="Compatible Apple-signed gamepolicyctl; otherwise discover through Xcode")
+    action = p.add_mutually_exclusive_group()
+    action.add_argument("--test-pid", type=int, help="Native deadlock.exe PID; temporarily force Game Mode on")
+    action.add_argument("--restore", action="store_true", help="Recover the previous automatic policy after an interrupted test")
+    p.add_argument("--seconds", type=int, default=300, help="Test duration, at most 900 seconds")
     args = parser.parse_args(argv)
     workspace = args.workspace.expanduser().resolve()
     try:
@@ -240,6 +247,19 @@ def main(argv=None):
             with args.log.open() as stream:
                 print(json.dumps(summarize(stream, args.pid, args.warmup_seconds,
                                            args.start_time, args.end_time), indent=2))
+            return 0
+        if args.command == "game-mode":
+            tool = game_mode.AppleTool(args.tool)
+            if args.test_pid is None and not args.restore:
+                print(json.dumps(tool.status(), indent=2))
+                return 0
+            with lock(workspace / "DeadlockData"):
+                receipt = workspace / "DeadlockData/game-mode-test.json"
+                if args.restore:
+                    print(json.dumps(game_mode.restore(tool, receipt), indent=2))
+                else:
+                    game_mode.trial(tool, args.test_pid, args.seconds, receipt,
+                                    report=lambda message: print(message, flush=True))
             return 0
         if args.command == "profiles":
             folder = workspace / "DeadlockData/profiles"
