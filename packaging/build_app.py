@@ -12,9 +12,10 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 from deadlock_mac.storage import download, private_dir, unpack, sha256
 from deadlock_mac import __version__
+from deadlock_mac import hotfix
 
 
-def build(output, downloads):
+def build(output, downloads, wine_hotfix=None):
     output = Path(output).expanduser().absolute()
     if output.exists() or output.suffix != ".app":
         raise SystemExit("Choose a new output path ending in .app; existing builds are preserved.")
@@ -32,6 +33,16 @@ def build(output, downloads):
         shutil.copytree(REPO / name, manager / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
     for name in ("LICENSE", "README.md", "SECURITY.md", "CHANGELOG.md"):
         shutil.copyfile(REPO / name, manager / name)
+    if wine_hotfix is not None:
+        spec = hotfix.specification()
+        source = hotfix.verify(wine_hotfix, spec)
+        if not (source / "COPYING.LIB").is_file() or not (source / "provenance.json").is_file():
+            raise SystemExit("Hotfix license and source provenance are required for bundling.")
+        destination = manager / "runtime-overlays" / spec["id"]
+        for name in (*spec["files"], "COPYING.LIB", "provenance.json"):
+            path = destination / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / name, path)
     shutil.copyfile(REPO / "packaging/launcher.py", resources / "launcher.py")
     certificate = resources / "python/lib/python3.13/site-packages/pip/_vendor/certifi/cacert.pem"
     if not certificate.is_file():
@@ -46,6 +57,7 @@ def build(output, downloads):
     subprocess.run(["/usr/bin/xcrun", "swiftc", "-parse-as-library", "-O", "-target", "arm64-apple-macos15.0",
                     str(REPO / "packaging/DeadlockManager.swift"), "-o", str(macos / "DeadlockManager")], check=True)
     inputs = {"manager_version": __version__, "python": lock, "certificates_sha256": sha256(certificate),
+              "wine_hotfix": hotfix.specification() if wine_hotfix is not None else None,
               "swift": subprocess.check_output(["/usr/bin/xcrun", "swiftc", "--version"], text=True).strip(),
               "source_files": {str(p.relative_to(REPO)): sha256(p)
                                for p in sorted([p for d in ("src", "bin", "config", "docs", "packaging")
@@ -69,5 +81,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--downloads", type=Path, required=True)
+    parser.add_argument("--wine-hotfix", type=Path, help="Reviewed local DLL overlay to include in fresh setups")
     args = parser.parse_args()
-    build(args.output, args.downloads)
+    build(args.output, args.downloads, args.wine_hotfix)

@@ -263,3 +263,23 @@ a second copy of current data, exit Steam, and restore only the files you intend
 - [CodeWeavers: install Steam](https://support.codeweavers.com/installing-steam-in-crossover)
 - [CodeWeavers: bottle storage](https://support.codeweavers.com/en_US/change-the-bottle-directory-in-crossover-mac)
 - [CrossOver licensing](https://www.codeweavers.com/store/licensing)
+
+## Exit, recover display settings, and verify hotfix status
+
+Use **Exit Deadlock** in the app or `python3 bin/deadlock-mac exit`. This requests
+normal closure and leaves Windows Steam available to sync. A Wine debugger or
+unresponsive game is reported as a failure; it is not automatically force-killed.
+Use `wine-hotfix` to inspect the verified overlay, or `wine-hotfix --set on/off`
+with Steam closed. See [the build/rollback procedure](WINE-HOTFIX.md).
+
+For display recovery with Steam closed, `graphics-preset` accepts `--mode borderless`
+and explicit `--width` / `--height`, backs up the old configuration and preserves
+quality/render scale. For example, this test Mac previously used 1512×982:
+
+```sh
+python3 bin/deadlock-mac graphics-preset --mode borderless --width 1512 --height 982 --apply
+```
+
+Choose dimensions appropriate to your display; this example is not universal.
+Fullscreen 1920×1200 later showed a size mismatch/black-screen failure and remains
+a qualification issue. Game Mode can still be enabled by manager Play in borderless.

@@ -59,7 +59,12 @@ def summarize(lines, pid, warmup_seconds=0, start_time=None, end_time=None):
             "mean_presentation_fps": round(1000 / statistics.mean(intervals), 2),
             "median_interval_ms": round(statistics.median(intervals), 3),
             "p95_interval_ms": round(percentile(.95), 3), "p99_interval_ms": round(percentile(.99), 3),
+            "p99_9_interval_ms": round(percentile(.999), 3),
+            "slowest_one_percent_mean_interval_ms": round(statistics.mean(ordered[-max(1, math.ceil(len(ordered) * .01)):]), 3),
             "max_interval_ms": round(max(intervals), 3),
-            "samples_over_33_33_ms": sum(v > 1000 / 30 for v in intervals),
+            "samples_over_16_67_ms": sum(v > 16.67 for v in intervals),
+            "samples_over_33_33_ms": sum(v > 33.33 for v in intervals),
+            "samples_over_50_ms": sum(v > 50 for v in intervals),
+            "samples_over_100_ms": sum(v > 100 for v in intervals),
             "mean_gpu_ms": round(statistics.mean(gpu_times), 3),
             "scope": "Metal HUD presentation interval samples for one process; not unique simulation frames or a match benchmark. Time filters select log records, whose samples can precede their timestamp. Loading and focus-loss gaps remain included."}

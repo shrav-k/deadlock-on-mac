@@ -93,6 +93,7 @@ final class ManagerModel: ObservableObject {
                                     "steam": "Steam is starting. First startup may take a few minutes before sign-in appears.",
                                     "install": "Install request sent. Complete the download in Steam.",
                                     "launch": "Play request sent. Check the game window.",
+                                    "exit": "Deadlock is closed. Steam remains open; check Details for Game Mode restoration.",
                                     "performance": "Settings saved. Restart Windows Steam for them to apply.",
                                     "graphics-preset": "Display settings saved with a backup. Verify them in the game.",
                                     "game-mode": "Game Mode operation finished. Check the policy in Details."]
@@ -110,6 +111,9 @@ final class ManagerModel: ObservableObject {
 struct ContentView: View {
     @StateObject private var model = ManagerModel()
     @State private var showDetails = true
+    @State private var displayMode = "fullscreen"
+    @State private var displayWidth = "1920"
+    @State private var displayHeight = "1200"
     var body: some View {
         ScrollView {
         VStack(alignment: .leading, spacing: 18) {
@@ -143,6 +147,7 @@ struct ContentView: View {
                 Button("2. Open Steam") { model.run(["steam"], label: "Opening Steam…") }
                 Button("3. Install Deadlock") { model.run(["install"], label: "Opening Deadlock in Steam…") }
                 Button("Play") { model.play() }
+                Button("Exit Deadlock") { model.run(["exit"], label: "Closing Deadlock normally…") }
                 Spacer()
             }.controlSize(.large).disabled(model.running)
             Text("Complete Steam Guard in Steam. Cloud support depends on the game; resolve any sync conflicts yourself.")
@@ -152,9 +157,36 @@ struct ContentView: View {
                 Button("60 FPS + performance HUD") {
                     model.run(["performance", "--fps-cap", "60", "--hud", "on", "--hud-log", "on"], label: "Saving test settings…")
                 }
-                Button("1080p fullscreen") { model.run(["graphics-preset", "--apply"], label: "Backing up and updating display settings…") }
             }.disabled(model.running)
-            Text("Exit Windows Steam before changing test settings. Apply 1080p after the game has run once.")
+            GroupBox("Display settings") {
+                HStack {
+                    Picker("Mode", selection: $displayMode) {
+                        Text("Fullscreen").tag("fullscreen")
+                        Text("Borderless").tag("borderless")
+                    }.frame(width: 210)
+                    TextField("Width", text: $displayWidth).frame(width: 70)
+                    Text("×")
+                    TextField("Height", text: $displayHeight).frame(width: 70)
+                    Button("Preview") {
+                        model.run(["graphics-preset", "--mode", displayMode, "--width", displayWidth, "--height", displayHeight], label: "Previewing display changes…")
+                    }
+                    Button("Apply with backup") {
+                        model.run(["graphics-preset", "--mode", displayMode, "--width", displayWidth, "--height", displayHeight, "--apply"], label: "Backing up and updating display settings…")
+                    }
+                }.padding(5).disabled(model.running)
+                Text("Close Windows Steam before applying. Use a resolution supported by your display; graphics quality and render scale are preserved.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            DisclosureGroup("Wine exit hotfix") {
+                HStack {
+                    Button("Check hotfix") { model.run(["wine-hotfix"], label: "Verifying Wine exit hotfix…") }
+                    Button("Enable") { model.run(["wine-hotfix", "--set", "on"], label: "Enabling verified hotfix…") }
+                    Button("Roll back") { model.run(["wine-hotfix", "--set", "off"], label: "Disabling hotfix…") }
+                }.disabled(model.running)
+                Text("Close Windows Steam before changing the hotfix. The original Wine engine stays intact.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Text("Exit Windows Steam before changing test settings. Display settings are available after the game has run once.")
                 .font(.caption).foregroundStyle(.secondary)
             GroupBox("Game Mode") {
                 VStack(alignment: .leading, spacing: 8) {

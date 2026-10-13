@@ -41,3 +41,12 @@ still requires Developer ID signing/notarization, a complete transitive dependen
 and license inventory, upgrade/recovery testing and the gameplay acceptance gates
 in [architecture](../docs/ARCHITECTURE.md). Bundled Python/Pip license files are
 retained; that alone does not complete the distribution license audit.
+
+## Include the reviewed exit overlay
+
+After following [the source build guide](../docs/WINE-HOTFIX.md), add
+`--wine-hotfix ../Runtimes/highball-exitfix-v1` to the app build command. The builder
+verifies the DLL hashes and includes license/provenance. Fresh bootstrap stages
+that payload and enables it before Steam starts, while honoring explicit rollback.
+A source-only preview without this option does not include the hotfix. Public
+distribution still requires corresponding-source/license review and notarization.

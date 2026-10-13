@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from deadlock_mac import performance, game_settings
 from deadlock_mac.cli import bootstrap, setup
-from deadlock_mac.diagnostics import power_status
+from deadlock_mac.diagnostics import display_status, power_status
 from deadlock_mac.steam import parse_vdf
 from deadlock_mac.storage import ManagerError
 
@@ -70,12 +70,25 @@ class PerformanceTests(unittest.TestCase):
         self.video.write_text(self.original.replace('"20"', '"21"'))
         with self.assertRaises(ManagerError):
             game_settings.configure(self.root, self.profile)
+
         self.video.write_text(self.original)
         other = self.steam.parent / "userdata/456/1422450/local/cfg/video.txt"
         other.parent.mkdir(parents=True)
         other.write_text(self.original)
         with self.assertRaises(ManagerError):
             game_settings.configure(self.root, self.profile)
+
+    def test_borderless_recovery_preserves_quality_and_rejects_invalid_size(self):
+        result = game_settings.configure(self.root, self.profile, apply=True, check_running=lambda: False,
+                                         mode="borderless", width=1512, height=982)
+        values = parse_vdf(self.video.read_text())["video.cfg"]
+        self.assertEqual(values["setting.defaultres"], "1512")
+        self.assertEqual(values["setting.fullscreen"], "0")
+        self.assertEqual(values["setting.nowindowborder"], "1")
+        self.assertEqual(values["setting.mat_viewportscale"], "0.73")
+        self.assertTrue((Path(result["backup"]) / "video.txt").is_file())
+        with self.assertRaises(ManagerError):
+            game_settings.configure(self.root, self.profile, width=-1)
 
     def test_bootstrap_preflight_precedes_downloads(self):
         with patch("deadlock_mac.cli.preflight", side_effect=ManagerError("Rosetta missing")), \
@@ -90,6 +103,16 @@ class PerformanceTests(unittest.TestCase):
             run.side_effect = [type("R", (), {"stdout": "Now drawing from 'AC Power'\nprivate battery id"})(),
                                type("R", (), {"stdout": "Battery Power:\n lowpowermode 1\nAC Power:\n lowpowermode 0\n"})()]
             self.assertEqual(power_status(), {"source": "AC Power", "low_power_mode": False})
+
+    def test_display_report_excludes_serial_and_labels_desktop_scope(self):
+        value = {"SPDisplaysDataType": [{"sppci_model": "GPU", "spdisplays_ndrvs": [
+            {"_name": "Built-in", "_spdisplays_resolution": "1512 x 982", "_spdisplays_display-serial-number": "private"}]}]}
+        with patch("deadlock_mac.diagnostics.platform.system", return_value="Darwin"), \
+                patch("deadlock_mac.diagnostics.subprocess.run", return_value=type("R", (), {"stdout": json.dumps(value)})()):
+            report = display_status()
+        self.assertEqual(report["displays"][0]["desktop_mode"], "1512 x 982")
+        self.assertNotIn("private", json.dumps(report))
+        self.assertIn("not verification", report["scope"])
 
     def test_setup_does_not_reinitialize_a_running_environment(self):
         with patch("deadlock_mac.cli.preflight"), \

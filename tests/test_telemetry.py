@@ -4,6 +4,14 @@ from deadlock_mac.storage import ManagerError
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_rounded_60_fps_intervals_are_not_counted_as_over_16_67_ms(self):
+        row = "2026-10-13 11:00:00.000 wine[123:1] metal-HUD: 1,0,44,16.67,3,33.33,4,51,8\n"
+        result = summarize([row], 123)
+        self.assertEqual(result["samples_over_16_67_ms"], 2)
+        self.assertEqual(result["samples_over_33_33_ms"], 1)
+        self.assertEqual(result["p99_9_interval_ms"], 51)
+        self.assertEqual(result["slowest_one_percent_mean_interval_ms"], 51)
+
     def test_filter_process_exclude_warmup_and_ignore_malformed_lines(self):
         rows = ["2026-10-13 11:00:00.000 wine[123:1] metal-HUD: 1,0,44,100,3\n",
                 "2026-10-13 11:00:10.000 wine[456:1] metal-HUD: 2,0,44,1000,3\n",

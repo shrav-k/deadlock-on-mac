@@ -35,12 +35,17 @@ def plan(profile):
     return path, content, video
 
 
-def configure(workspace, profile, *, apply=False, check_running=None):
+def configure(workspace, profile, *, apply=False, check_running=None, mode="fullscreen", width=1920, height=1080):
     from .backup import wine_processes_running
+    if mode not in ("fullscreen", "borderless") or type(width) is not int or type(height) is not int or not (640 <= width <= 7680 and 480 <= height <= 4320):
+        raise ManagerError("Choose fullscreen/borderless and a supported display size (640–7680 by 480–4320).")
+    settings = {**BALANCED_1080, "setting.defaultres": str(width), "setting.defaultresheight": str(height),
+                "setting.fullscreen": "1" if mode == "fullscreen" else "0",
+                "setting.nowindowborder": "0" if mode == "fullscreen" else "1"}
     if apply and (check_running or wine_processes_running)():
         raise ManagerError("Exit Windows Steam and all Wine bottles before editing graphics settings.")
     path, original, video = plan(profile)
-    changes = {key: {"before": video[key], "after": value} for key, value in BALANCED_1080.items()}
+    changes = {key: {"before": video[key], "after": value} for key, value in settings.items()}
     if not apply:
         return {"applied": False, "changes": changes, "note": "Only output resolution/display mode change; existing render scale and quality are preserved."}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -53,7 +58,7 @@ def configure(workspace, profile, *, apply=False, check_running=None):
     # Replace only the selected values, preserving every other byte and key.
     import re
     modified = original
-    for key, value in BALANCED_1080.items():
+    for key, value in settings.items():
         modified, count = re.subn(r'("' + re.escape(key) + r'"\s+")[^"]*(")',
                                   lambda m: m.group(1) + value + m.group(2), modified)
         if count != 1:
@@ -70,4 +75,4 @@ def configure(workspace, profile, *, apply=False, check_running=None):
     finally:
         Path(temporary).unlink(missing_ok=True)
     return {"applied": True, "changes": changes, "backup": str(backup),
-            "note": "Confirm fullscreen resolution and render scale in the game. Steam Cloud decisions remain manual."}
+            "note": "Confirm display mode, resolution and render scale in the game. Steam Cloud decisions remain manual."}

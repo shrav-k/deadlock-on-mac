@@ -1,0 +1,31 @@
+From f38f3ac7708f93ceaf1ff2404690bd4c8d88d6d0 Mon Sep 17 00:00:00 2001
+From: Tim Clem <tclem@codeweavers.com>
+Date: Tue, 14 Apr 2026 14:38:30 -0700
+Subject: [PATCH] sechost: Don't attempt to unregister an HDEVNOTIFY with bad
+ magic.
+
+---
+ dlls/sechost/service.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/sechost/service.c b/dlls/sechost/service.c
+index 011ef5c1a62f..f05fd2d7e80e 100644
+--- a/dlls/sechost/service.c
++++ b/dlls/sechost/service.c
+@@ -2207,10 +2207,12 @@ BOOL WINAPI I_ScUnregisterDeviceNotification( HDEVNOTIFY handle )
+             SetLastError( ERROR_INVALID_HANDLE );
+             ret = FALSE;
+         }
+-
+-        list_remove( &notify->entry );
+-        free( notify->path );
+-        free( notify );
++        else
++        {
++            list_remove( &notify->entry );
++            free( notify->path );
++            free( notify );
++        }
+     }
+     __EXCEPT_PAGE_FAULT
+     {

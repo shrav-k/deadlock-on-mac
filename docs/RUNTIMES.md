@@ -8,7 +8,7 @@ No engine has yet passed this repository's full Deadlock gameplay acceptance gat
 | [Highball engine](https://github.com/gauthierpiarrette/highball-engine) + [paired DXMT](https://github.com/gauthierpiarrette/dxmt/tree/a44471614f7cf4817e4eee717993eb19e35184b9) | Default free candidate | Published LGPL Wine source and patch series, including cross-process Metal window support. Steam login and graphics probe pass here. Small project; independent reproducible build and full gameplay remain unverified. |
 | [Sikarugir Wine engines](https://github.com/Sikarugir-App/Engines) + [DXMT](https://github.com/3Shain/dxmt) | First free candidate | Current standalone Wine 11 package exposes the Mac driver interface DXMT needs. Pinned downloads, separate prefixes. Exact engine build reproducibility remains unverified. |
 | [Sikarugir wrapper](https://github.com/Sikarugir-App/Sikarugir) | Comparison option | Active Wineskin successor with several renderers. Creator/launcher are not all under the FOSS license; we use the engine directly instead of adopting its app layer. Its brew cask also clears quarantine and re-signs the app. |
-| [Official Wine macOS packages](https://github.com/Gcenx/macOS_Wine_builds) | Future comparison | Published macOS packages and upstream Wine sources. DXMT needs compatible Mac driver exports; a newer Wine version alone does not establish that. |
+| [Official Wine macOS packages](https://github.com/Gcenx/macOS_Wine_builds) | API-tested candidate | Wine 11.18 passes 32/64-bit notification probes in an isolated prefix. Steam/DXMT/Deadlock remain unqualified. A newer base alone does not establish that integration. |
 | [Official CrossOver](https://www.codeweavers.com/crossover) | Optional adapter | Intact signed vendor app, commercial support and D3DMetal/DXMT choices. Paid after trial. Useful comparison if free runtimes fall short. |
 | [Decanter](https://github.com/ricardothesillyllama/Decanter) | Architecture reference | Save protection, runtime inventory and recovery ideas. New project, author reports one testing machine. Broad game-manager scope exceeds this Steam-specific project. |
 | [steamplay-mac](https://github.com/Drustburn/steamplay-mac) | Research, not baseline | Builds Wine from public sources and integrates native Steam. Native-client injection and update suppression create additional failure modes. We keep Windows Steam unmodified. |
@@ -77,3 +77,9 @@ licenses and source obligations if distributing a runtime build.
 Steam updates the game and itself independently. Pinning a Wine runtime does not
 freeze Deadlock. CrossOver updates through its vendor app and has separate licensing.
 Back up local data and finish Cloud sync before any runtime comparison or migration.
+
+## Source hotfix and qualification lanes
+
+See [the Wine exit backport](WINE-HOTFIX.md) for matched-source builds, provenance,
+activation and rollback. See [runtime qualification](QUALITY.md) for candidate
+promotion, upstream contributions, broader game scope and the match protocol.

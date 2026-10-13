@@ -120,6 +120,10 @@ def environment(profile, tuning=None):
             # Only the paired Highball Wine/DXMT builds support remote layers.
             env["DXMT_ALLOW_CROSS_PROCESS_SWAPCHAIN"] = "1"
         env["WINEDLLOVERRIDES"] = "d3d10core,d3d11,dxgi,winemetal=b"
+        from .hotfix import active
+        overlay = active(profile)
+        if overlay:
+            env["WINEDLLPATH_PREPEND"] = str(overlay) + ":" + env["WINEDLLPATH_PREPEND"]
         if tuning is not None:
             from .performance import variables
             env.update(variables(tuning))
@@ -139,6 +143,17 @@ def launch_command(profile, action):
     return [str(wine_binary(profile)), str(steam), URIS[action]]
 
 
+def exit_command(profile):
+    # Wine taskkill without /F posts WM_CLOSE. Never kill Steam or the wineserver.
+    arguments = ["taskkill.exe", "/IM", "deadlock.exe"]
+    if profile["provider"] == "crossover":
+        cxstart = Path(profile["runtime"]) / "Contents/SharedSupport/CrossOver/bin/cxstart"
+        if not cxstart.is_file():
+            raise ManagerError("CrossOver cxstart is missing.")
+        return [str(cxstart), "--bottle", profile["prefix"], *arguments]
+    return [str(wine_binary(profile)), *arguments]
+
+
 def start(profile, action, log, tuning=None):
     command = launch_command(profile, action)
     if profile["provider"] == "crossover":
@@ -148,6 +163,8 @@ def start(profile, action, log, tuning=None):
         header = {"profile": profile["id"], "action": action,
                   "runtime": profile.get("runtime_version"), "dxmt": profile.get("dxmt_version"),
                   "performance_requested": tuning}
+        from .hotfix import status
+        header["wine_hotfix"] = status(profile)
         stream.write(("# manager " + json.dumps(header) + "\n").encode())
         stream.flush()
         process = subprocess.Popen(command, env=environment(profile, tuning), stdin=subprocess.DEVNULL,

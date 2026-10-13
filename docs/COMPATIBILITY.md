@@ -97,9 +97,8 @@ same cleanup fault despite the game window appearing to close normally.
 Upstream Wine has two relevant fixes for invalid device-notification handles:
 [argument validation and fault handling](https://github.com/wine-mirror/wine/commit/d8aa0abfb5923e4d0cbbb659e13f9f8f7c5c9ee0)
 and [skip removal when the handle is invalid](https://github.com/wine-mirror/wine/commit/f38f3ac7708f93ceaf1ff2404690bd4c8d88d6d0).
-The installed binary's disassembly lacks these guards. A source backport or engine
-upgrade is a candidate for a separate runtime test; it has not been applied or
-proven to resolve Deadlock's startup/exit behavior. Do not mix an arbitrary newer
+The installed binary's disassembly lacks these guards. A source backport was subsequently built and tested as described below; it does
+not establish that every startup/display/exit fault is resolved. Do not mix an arbitrary newer
 `sechost.dll` into the current runtime.
 
 The subsequent run applied 1512×982 fullscreen in the game's settings while
@@ -159,3 +158,50 @@ For each live result add: date, macOS/chip/RAM, engine and graphics versions,
 Deadlock build ID, resolution/settings, test duration, what worked, what failed,
 and whether the test was observed directly or reported by another user. Do not
 include account IDs, passwords, tokens, full local paths or unredacted logs.
+
+
+### Matched-source exit backport and newer Wine — 2026-10-13
+
+The reviewed `highball-exitfix-v1` overlay builds both sechost architectures from
+the exact Highball source/patchset plus the two upstream validation fixes.
+Independent build directories produced byte-identical DLLs after normalization;
+both preserve the original 208-entry export ABI. Both API probes passed null,
+readable-invalid and inaccessible handle cases with exact errors, plus a valid
+register/unregister cycle. The hardware D3D11 120-frame probe also passed. Base
+runtime files were not modified. See [build provenance](WINE-HOTFIX.md).
+
+The separate Gcenx Wine 11.18 macOS candidate initialized a fresh disposable prefix
+and passed both API probes. No Steam account or game install was copied. Steam,
+DXMT and Deadlock compatibility on that candidate remain untested. Upstream 11.19
+source is newer than the selected macOS binary channel; no automatic promotion
+occurred.
+
+The first patched Steam/game launch at 13:47 Pacific used the saved 1920×1200
+fullscreen settings. The user reported a size mismatch and black screen on exit.
+The game process subsequently disappeared and Game Mode restored, but the UI
+failure means this is not a passing quit test. At the user's request the remaining
+Wine environment was stopped and restarted. That failure is not attributed to a
+specific patch without a controlled comparison.
+
+After a backed-up return to 1512×982 borderless, the 14:03 launch reached the game.
+The user confirmed normal picture and clean in-game quit without the debugger.
+The process disappeared, its launch log contained no unhandled exception/page-fault
+backtrace, and independent Apple-tool status confirmed `auto`/off restoration.
+This is one successful in-game quit, not the ten-cycle/soak release gate.
+
+A later brief capture smoke test collected 765 HUD presentation samples from the
+real game's stderr log and verified Game Mode On at the boundary. This validates
+recording integration only; it is not a gameplay benchmark or stable-60 claim.
+
+
+The subsequent manager Exit test also completed: `taskkill` without `/F` requested
+normal close, the game process exited, Windows Steam stayed open, and the watcher
+restored `auto`. This is a separate successful manager-close cycle. Fullscreen
+qualification continues; borderless recovery is a fallback, not the final target.
+
+A standalone DXGI geometry probe successfully entered/restored 1512×982 and
+1920×1200 fullscreen with matching client, backbuffer and desktop dimensions.
+`FindClosestMatchingMode` mapped its 1920×1080 request to 1920×1200, so exact 1080p
+was not counted as a pass. Native API geometry alone does not prove visible
+coverage, focus behavior, or Deadlock correctness. The first probe revision used
+an incorrect resize ordering and timed out; it is not evidence against the runtime.

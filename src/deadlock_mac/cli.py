@@ -14,11 +14,14 @@ import urllib.error
 from . import __version__
 from .backup import snapshot, wine_processes_running
 from .catalog import REPO, artifacts, catalog, components, runtime_set
-from .diagnostics import engine_dependencies, power_status
+from .diagnostics import display_status, engine_dependencies, power_status
 from . import performance
 from . import game_settings
 from . import game_mode
 from . import game_session
+from . import game_exit
+from . import hotfix
+from . import benchmark
 from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
@@ -149,7 +152,12 @@ def bootstrap(workspace, name, family):
     install_runtimes(workspace, family)
     if not path.exists():
         create_profile(workspace, name, family=family)
-    setup(workspace, load_profile(workspace, name))
+    profile = load_profile(workspace, name)
+    if hotfix.install_available(workspace, profile):
+        print("Verified Wine exit hotfix enabled for this profile.")
+    elif hotfix.compatible(profile, hotfix.specification()):
+        print("Wine exit hotfix is not enabled. See docs/WINE-HOTFIX.md for the source build and activation procedure.")
+    setup(workspace, profile)
 
 
 def doctor(workspace, profile):
@@ -161,7 +169,9 @@ def doctor(workspace, profile):
               "bottle_exists": Path(profile["prefix"]).is_dir(),
               "steam_account": "Sign in and verify in Steam; credentials are not inspected."}
     result["power"] = power_status()
+    result["desktop_displays"] = display_status()
     result["performance_requested"] = performance.load(workspace, profile["id"])
+    result["wine_hotfix"] = hotfix.status(profile)
     try:
         steam = steam_path(profile)
         result["steam_installed"] = True
@@ -203,6 +213,16 @@ def main(argv=None):
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     sub.add_parser("runtimes", help="List available runtime combinations and known compatibility limits")
     sub.add_parser("setup", help="Initialize the free profile and install Windows Steam")
+    sub.add_parser("exit", help="Close Deadlock normally, leave Steam open, and verify Game Mode restoration")
+    p = sub.add_parser("wine-hotfix", help="Verify, enable or roll back the pinned exit fix; Steam must be closed to change it")
+    p.add_argument("--set", choices=("on", "off"))
+    p = sub.add_parser("benchmark", help="Start, mark or finish a private gameplay measurement")
+    p.add_argument("action", choices=("start", "mark", "finish"))
+    p.add_argument("--run", help="Run ID returned by benchmark start")
+    p.add_argument("--scenario", default="manual-match")
+    p.add_argument("--resolution", default="not recorded", help="User-reported resolution and display mode")
+    p.add_argument("--label", help="Scenario marker, such as gameplay, menu, or Mina ultimate")
+    p.add_argument("--warmup-seconds", type=float, default=0)
     for action in ("steam", "install", "launch"):
         p = sub.add_parser(action)
         p.add_argument("--dry-run", action="store_true", help="Print argv without executing anything")
@@ -219,8 +239,11 @@ def main(argv=None):
     p.add_argument("--hud", choices=("on", "off"))
     p.add_argument("--hud-log", choices=("on", "off"))
     p.add_argument("--reset", action="store_true")
-    p = sub.add_parser("graphics-preset", help="Preview a backed-up 1080p fullscreen edit; preserves quality and render scale")
+    p = sub.add_parser("graphics-preset", help="Preview a backed-up display edit; preserves quality and render scale")
     p.add_argument("--apply", action="store_true")
+    p.add_argument("--mode", choices=("fullscreen", "borderless"), default="fullscreen")
+    p.add_argument("--width", type=int, default=1920)
+    p.add_argument("--height", type=int, default=1080)
     p = sub.add_parser("performance-report", help="Summarize Metal HUD frame intervals for a game PID")
     p.add_argument("--log", type=Path, required=True)
     p.add_argument("--pid", type=int, required=True)
@@ -287,7 +310,7 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "setup", "backup", "performance", "graphics-preset"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark"):
             profile = load_profile(workspace, args.profile)
         if args.command == "runtime-dependencies":
             result = engine_dependencies(profile)
@@ -303,10 +326,24 @@ def main(argv=None):
                               "provider": profile["provider"], "executes": False}, indent=2))
             return 0
         with lock(workspace / "DeadlockData"):
-            if args.command == "bootstrap":
+            if args.command == "benchmark":
+                if args.action == "start":
+                    result = benchmark.start(workspace, profile, args.scenario, args.resolution)
+                elif not args.run:
+                    raise ManagerError("Use --run with the ID returned by benchmark start.")
+                elif args.action == "mark":
+                    result = benchmark.mark(workspace, profile, args.run, args.label or "gameplay")
+                else:
+                    result = benchmark.finish(workspace, profile, args.run, args.warmup_seconds)
+                print(json.dumps(result, indent=2))
+            elif args.command == "wine-hotfix":
+                result = hotfix.status(profile) if args.set is None else hotfix.configure(workspace, profile, args.set == "on")
+                print(json.dumps(result, indent=2))
+            elif args.command == "bootstrap":
                 bootstrap(workspace, args.profile, args.runtime)
             elif args.command == "graphics-preset":
-                print(json.dumps(game_settings.configure(workspace, profile, apply=args.apply), indent=2))
+                print(json.dumps(game_settings.configure(workspace, profile, apply=args.apply,
+                                                        mode=args.mode, width=args.width, height=args.height), indent=2))
             elif args.command == "performance":
                 settings = performance.load(workspace, args.profile)
                 if args.reset:
@@ -329,6 +366,10 @@ def main(argv=None):
                 setup(workspace, profile)
             elif args.command == "backup":
                 print(snapshot(profile, workspace / "DeadlockBackups"))
+            elif args.command == "exit":
+                logs = private_dir(workspace / "DeadlockData/logs" / args.profile)
+                print(game_exit.close(workspace, profile, logs / f"exit-{timestamp()}.log",
+                                      report=lambda text: print(text, flush=True)))
             else:
                 logs = private_dir(workspace / "DeadlockData/logs" / args.profile)
                 log = logs / f"{args.command}-{timestamp()}.log"

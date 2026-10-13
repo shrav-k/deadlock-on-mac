@@ -68,3 +68,16 @@ a future game/anti-cheat update will work.
 
 See [performance testing](PERFORMANCE.md) for the 60 FPS launch settings, shader
 warm-up, output-versus-render resolution and the limits of Metal HUD samples.
+
+## Runtime qualification and exit regression
+
+Use [QUALITY.md](QUALITY.md) for the full promotion matrix and marked match
+measurement commands. `packaging/check_runtime.py` builds and executes both
+architectures of `tests/native/device_notify_probe.c`, checking exact Windows
+error codes and valid-handle cleanup. `--graphics` also runs the existing rendering
+probe. [WINE-HOTFIX.md](WINE-HOTFIX.md) documents the pinned source backport.
+
+The manager suite additionally covers normal Exit requests, pending restoration,
+profile isolation, hotfix corruption/rollback, and benchmark log rotation, PID
+filtering and metadata privacy. Native probes are opt-in local checks, not run by
+credential-free unit CI.

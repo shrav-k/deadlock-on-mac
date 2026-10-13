@@ -46,6 +46,7 @@ Sign into **your existing account in Steam**. Then install and play:
 python3 bin/deadlock-mac install
 python3 bin/deadlock-mac launch
 python3 bin/deadlock-mac doctor
+python3 bin/deadlock-mac exit
 ```
 
 Steam manages game downloads, updates, entitlement, friends and any supported
@@ -105,3 +106,9 @@ Source code is MIT licensed. Runtime components have their own licenses and are
 downloaded separately. This project is not affiliated with Valve, Apple,
 CodeWeavers, WineHQ or Sikarugir. Original upstream attribution is retained in
 [LICENSE](LICENSE) and Git history.
+
+The [quality protocol](docs/QUALITY.md) defines runtime promotion gates, repeated
+sandbox comparisons and real-match recording. The [Wine exit hotfix guide](docs/WINE-HOTFIX.md)
+covers the pinned source build, regression probes and reversible activation.
+The Exit Deadlock button requests normal shutdown and verifies Game Mode restoration;
+it does not turn a crash or timeout into a successful test.

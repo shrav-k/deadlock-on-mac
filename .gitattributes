@@ -1,0 +1,2 @@
+# Preserve hash-pinned upstream patch context, including blank context lines.
+patches/wine/*.patch -whitespace

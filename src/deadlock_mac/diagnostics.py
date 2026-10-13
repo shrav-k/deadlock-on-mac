@@ -1,10 +1,33 @@
 """Read-only package inspection. No credentials or account files are read."""
 from pathlib import Path
+import json
 import platform
 import subprocess
 
 from .runtime import clean_env, environment
 from .storage import ManagerError
+
+
+def display_status():
+    """Allowlisted desktop/display inventory; no serial numbers or EDID blobs."""
+    if platform.system() != "Darwin":
+        return {"verified": False, "displays": []}
+    try:
+        result = subprocess.run(["/usr/sbin/system_profiler", "SPDisplaysDataType", "-json"],
+                                capture_output=True, text=True, timeout=20, check=True, env=clean_env())
+        displays = []
+        for gpu in json.loads(result.stdout).get("SPDisplaysDataType", []):
+            for display in gpu.get("spdisplays_ndrvs", []):
+                displays.append({"gpu": gpu.get("sppci_model"), "name": display.get("_name"),
+                                 "connection": display.get("spdisplays_connection_type"),
+                                 "main": display.get("spdisplays_main") == "spdisplays_yes",
+                                 "mirrored": display.get("spdisplays_mirror") == "spdisplays_on",
+                                 "desktop_mode": display.get("_spdisplays_resolution"),
+                                 "physical_pixels": display.get("_spdisplays_pixels")})
+        return {"verified": True, "displays": displays,
+                "scope": "macOS display inventory, not verification of the game's render resolution or fullscreen coverage"}
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return {"verified": False, "displays": []}
 
 
 def power_status():

@@ -21,6 +21,11 @@
 - Make manager Play own a detached Game Mode session with no gameplay deadline,
   prior-policy restoration, bottle/PID matching, concurrency protection and recovery.
 
+- Add normal Exit Deadlock, a reversible hash-verified Wine exit backport, matched-source
+  build recipe, dual-architecture native probes and a newer Wine comparison harness.
+- Add private gameplay markers/reports, frame-time tails, explicit runtime promotion
+  gates, and backed-up borderless display recovery.
+
 Forked from `0ximu/deadlock-on-mac` at
 `aedcd5128613b6f94e228d6258840b33fdb53782`. Original history and MIT attribution
 are retained. Original installer paths are removed from this branch.
