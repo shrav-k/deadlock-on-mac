@@ -28,6 +28,9 @@
 - Add an opt-in, reversible Wine Retina setting for high-resolution borderless
   experiments; extend the native display probe with mode enumeration, explicit
   resolution sequences and desktop restoration checks.
+- Add backed-up game/menu FPS-limit editing and preserve configuration line endings;
+  record the successful Retina-borderless coverage/input/app-switching test separately
+  from unresolved fullscreen and delayed-exit behavior.
 
 Forked from `0ximu/deadlock-on-mac` at
 `aedcd5128613b6f94e228d6258840b33fdb53782`. Original history and MIT attribution

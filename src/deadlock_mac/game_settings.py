@@ -25,7 +25,7 @@ def plan(profile):
     path = video_file(profile)
     if path.stat().st_size > 256 * 1024:
         raise ManagerError("Unexpectedly large video configuration.")
-    content = path.read_text()
+    content = path.read_bytes().decode("utf-8")
     value = parse_vdf(content)
     video = value.get("video.cfg")
     if not isinstance(video, dict) or video.get("Version") != "20" or any(not isinstance(v, str) for v in video.values()):
@@ -48,14 +48,37 @@ def configure(workspace, profile, *, apply=False, check_running=None, mode="full
     changes = {key: {"before": video[key], "after": value} for key, value in settings.items()}
     if not apply:
         return {"applied": False, "changes": changes, "note": "Only output resolution/display mode change; existing render scale and quality are preserved."}
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    backup = private_dir(Path(workspace) / "DeadlockData/settings-backups" / profile["id"] / stamp)
-    with (backup / "video.txt").open("x") as stream:
-        stream.write(original)
-    (backup / "video.txt").chmod(0o600)
-    atomic_json(backup / "receipt.json", {"schema": 1, "file": str(path.relative_to(Path(profile["prefix"]))),
-                                         "before_sha256": sha256(path), "changes": changes})
-    # Replace only the selected values, preserving every other byte and key.
+    result = _write_changes(workspace, profile, path, original, settings, changes,
+                            check_running or wine_processes_running)
+    return {**result, "note": "Confirm display mode, resolution and render scale in the game. Steam Cloud decisions remain manual."}
+
+
+def configure_fps(workspace, profile, *, cap=60, menu_cap=60, apply=False, check_running=None):
+    from .backup import wine_processes_running
+    if any(type(value) is not int or not 30 <= value <= 360 for value in (cap, menu_cap)):
+        raise ManagerError("Game and menu FPS limits must be integers from 30 to 360.")
+    running = check_running or wine_processes_running
+    if apply and running():
+        raise ManagerError("Exit Windows Steam and all Wine bottles before editing game FPS limits.")
+    path = no_symlinks(video_file(profile).with_name("machine_convars.vcfg"))
+    if path.stat().st_size > 256 * 1024:
+        raise ManagerError("Unexpectedly large game variable configuration.")
+    original = path.read_bytes().decode("utf-8")
+    config = parse_vdf(original).get("config")
+    values = config.get("convars") if isinstance(config, dict) else None
+    keys = ("fps_max", "fps_max_ui")
+    if not isinstance(values, dict) or any(not isinstance(values.get(key), str) or not values[key].isdigit() for key in keys):
+        raise ManagerError("Untested game FPS configuration; use Deadlock's settings menu.")
+    settings = {"fps_max": str(cap), "fps_max_ui": str(menu_cap)}
+    changes = {key: {"before": values[key], "after": value} for key, value in settings.items()}
+    if not apply:
+        return {"applied": False, "changes": changes}
+    result = _write_changes(workspace, profile, path, original, settings, changes, running)
+    return {**result, "note": "Saved game/menu limits; verify both in Deadlock after restart. These limits do not guarantee a minimum FPS."}
+
+
+def _write_changes(workspace, profile, path, original, settings, changes, running):
+    # Replace only selected values and retain original line endings/other keys.
     import re
     modified = original
     for key, value in settings.items():
@@ -63,16 +86,22 @@ def configure(workspace, profile, *, apply=False, check_running=None, mode="full
                                   lambda m: m.group(1) + value + m.group(2), modified)
         if count != 1:
             raise ManagerError("Ambiguous graphics key; original configuration was preserved.")
-    if path.read_text() != original:
-        raise ManagerError("Configuration changed during preparation; retry with Steam closed.")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    backup = private_dir(Path(workspace) / "DeadlockData/settings-backups" / profile["id"] / stamp)
+    with (backup / path.name).open("xb") as stream:
+        stream.write(original.encode("utf-8"))
+    (backup / path.name).chmod(0o600)
+    atomic_json(backup / "receipt.json", {"schema": 1, "file": str(path.relative_to(Path(profile["prefix"]))),
+                                         "before_sha256": sha256(path), "changes": changes})
+    if running() or path.read_bytes() != original.encode("utf-8"):
+        raise ManagerError("Wine started or configuration changed during preparation; retry with Steam closed.")
     fd, temporary = tempfile.mkstemp(prefix=".video-", dir=path.parent)
     try:
-        with os.fdopen(fd, "w") as stream:
-            stream.write(modified)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(modified.encode("utf-8"))
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)
-    return {"applied": True, "changes": changes, "backup": str(backup),
-            "note": "Confirm display mode, resolution and render scale in the game. Steam Cloud decisions remain manual."}
+    return {"applied": True, "changes": changes, "backup": str(backup)}

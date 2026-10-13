@@ -217,6 +217,22 @@ The user accepted high-resolution borderless as an alternative. With Steam and
 Wine stopped, enabling `RetinaMode=y` changed the probe's reported desktop from
 1512×982 to 3024×1964 at 120 Hz. Both mode-list probes exited successfully and
 preserved their starting desktop. Deadlock was launched through Steam at 14:42
-with 3024×1964 borderless and Game Mode on. Visual/input/app-switching acceptance
-and performance for this configuration are still pending. No fullscreen fix,
-external-display support or sustained native-resolution frame rate is claimed.
+with 3024×1964 borderless and Game Mode on. The user confirmed that the picture
+fills the screen, pointer clicks align and Command–Tab away/back works. The user
+did not separately confirm the HUD dimensions; saved output dimensions and the
+Wine desktop probe are 3024×1964. No fullscreen fix, external-display support or
+sustained native-resolution frame rate is claimed.
+
+The manager's next normal-close request at 14:52 timed out after 30 seconds. The
+process subsequently exited and Game Mode restored to `auto` at 14:53:49. No fatal
+exception was found in the saved launch log. The user confirmed using the game's
+Exit Game option and that it closed normally. This is a successful in-game exit
+with Retina enabled, but not a clean manager-exit pass: its earlier request did
+not complete on its own.
+
+After Steam closed, the saved game/menu caps were still 400/120. Both were changed
+to 60 with an exact configuration backup; the 3024×1964 borderless settings were
+preserved. The engine's requested FPS limit alone was therefore not sufficient
+evidence of the game's saved cap. Verification after relaunch is pending. These
+later runs use Steam-updated game build 25917577; earlier build 25841406 results
+must not be treated as a controlled same-build comparison.

@@ -90,6 +90,31 @@ class PerformanceTests(unittest.TestCase):
         with self.assertRaises(ManagerError):
             game_settings.configure(self.root, self.profile, width=-1)
 
+    def test_game_fps_preserves_line_endings_other_settings_and_backup(self):
+        path = self.video.with_name("machine_convars.vcfg")
+        original = b'"config"\r\n{\r\n"convars" { "fps_max" "400" "fps_max_ui" "120" "unrelated" "keep" }\r\n}\r\n'
+        path.write_bytes(original)
+        preview = game_settings.configure_fps(self.root, self.profile)
+        self.assertEqual(preview["changes"]["fps_max"]["before"], "400")
+        self.assertEqual(path.read_bytes(), original)
+        result = game_settings.configure_fps(self.root, self.profile, apply=True, check_running=lambda: False)
+        self.assertEqual(path.read_bytes(), original.replace(b'"400"', b'"60"').replace(b'"120"', b'"60"'))
+        self.assertEqual((Path(result["backup"]) / path.name).read_bytes(), original)
+
+    def test_game_fps_rejects_live_wine_unknown_format_duplicate_and_bad_cap(self):
+        path = self.video.with_name("machine_convars.vcfg")
+        with self.assertRaisesRegex(ManagerError, "Exit Windows Steam"):
+            game_settings.configure_fps(self.root, self.profile, apply=True, check_running=lambda: True)
+        for text in ('"config" { "unknown" {} }',
+                     '"config" { "convars" { "fps_max" "400" "fps_max" "100" "fps_max_ui" "120" } }'):
+            path.write_text(text)
+            with self.assertRaises(ManagerError):
+                game_settings.configure_fps(self.root, self.profile, apply=True, check_running=lambda: False)
+            self.assertEqual(path.read_text(), text)
+        for cap in (True, -1, 0, 361):
+            with self.assertRaises(ManagerError):
+                game_settings.configure_fps(self.root, self.profile, cap=cap)
+
     def test_bootstrap_preflight_precedes_downloads(self):
         with patch("deadlock_mac.cli.preflight", side_effect=ManagerError("Rosetta missing")), \
                 patch("deadlock_mac.cli.install_runtimes") as install:

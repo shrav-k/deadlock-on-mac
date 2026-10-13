@@ -245,6 +245,10 @@ def main(argv=None):
     p.add_argument("--mode", choices=("fullscreen", "borderless"), default="fullscreen")
     p.add_argument("--width", type=int, default=1920)
     p.add_argument("--height", type=int, default=1080)
+    p = sub.add_parser("game-fps", help="Preview or apply backed-up game/menu FPS limits; Steam must be closed")
+    p.add_argument("--cap", type=int, default=60)
+    p.add_argument("--menu-cap", type=int, default=60)
+    p.add_argument("--apply", action="store_true")
     p = sub.add_parser("retina", help="Preview or apply a backed-up Wine Retina setting; Steam must be closed")
     action = p.add_mutually_exclusive_group()
     action.add_argument("--set", choices=("on", "off", "default"))
@@ -316,7 +320,7 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps"):
             profile = load_profile(workspace, args.profile)
         if args.command == "runtime-dependencies":
             result = engine_dependencies(profile)
@@ -353,6 +357,9 @@ def main(argv=None):
             elif args.command == "retina":
                 print(json.dumps(wine_display.configure(workspace, profile, args.set,
                                                         apply=args.apply, restore=args.restore), indent=2))
+            elif args.command == "game-fps":
+                print(json.dumps(game_settings.configure_fps(workspace, profile, cap=args.cap,
+                                                             menu_cap=args.menu_cap, apply=args.apply), indent=2))
             elif args.command == "performance":
                 settings = performance.load(workspace, args.profile)
                 if args.reset:

@@ -157,6 +157,9 @@ struct ContentView: View {
                 Button("60 FPS + performance HUD") {
                     model.run(["performance", "--fps-cap", "60", "--hud", "on", "--hud-log", "on"], label: "Saving test settings…")
                 }
+                Button("Set game and menu limits to 60 FPS") {
+                    model.run(["game-fps", "--cap", "60", "--menu-cap", "60", "--apply"], label: "Backing up and saving game FPS limits…")
+                }
             }.disabled(model.running)
             GroupBox("Display settings") {
                 HStack {

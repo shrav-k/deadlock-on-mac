@@ -19,6 +19,22 @@ confirm actual behavior with the HUD. Steam passes its startup environment to th
 game, so sending a second launch request does not change an already-running client's
 settings. The private **Steam startup log** normally receives the game's HUD output.
 
+Also set the game's own limits after its first run, with Steam/Wine closed:
+
+```sh
+python3 bin/deadlock-mac game-fps --cap 60 --menu-cap 60          # preview
+python3 bin/deadlock-mac game-fps --cap 60 --menu-cap 60 --apply  # backup and apply
+```
+
+The app has a separate **Set game and menu limits to 60 FPS** button. This changes
+only `fps_max` and `fps_max_ui` in the single account's `machine_convars.vcfg`,
+preserving unrelated settings and line endings. Unknown formats/duplicate keys
+are refused. The original file and change receipt are kept under
+`DeadlockData/settings-backups/`. Verify both limits in the game after restarting;
+a saved cap is a ceiling, not a guarantee of minimum performance. We observed
+400/120 in the saved game settings while the manager was requesting a 60 FPS
+renderer limit, so the renderer request alone must not be reported as a verified cap.
+
 `--sync auto` preserves the engine default. It does not mean synchronization is off.
 `none`, `msync` and `esync` are explicit comparison options, requiring a full restart;
 no one mode is claimed to improve every game or engine. `performance --reset` removes
@@ -62,8 +78,9 @@ python3 bin/deadlock-mac launch --game-mode-tool /absolute/path/to/gamepolicyctl
 ```
 
 The app exposes Retina status/enable/disable under Display settings. This is
-opt-in and experimental, pending visible coverage, pointer alignment, Command–Tab,
-quit/relaunch and performance acceptance. It affects the whole Wine bottle,
+opt-in and experimental. Visible coverage, pointer alignment and Command–Tab have
+passed one user-observed built-in-display test; quit/relaunch and performance
+acceptance remain open. It affects the whole Wine bottle,
 including Steam, and takes effect on restart. It does not change macOS preferences.
 For CrossOver, use its own Retina control.
 
