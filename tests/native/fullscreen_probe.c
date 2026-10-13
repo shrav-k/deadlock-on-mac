@@ -7,6 +7,27 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_TESTS 32
+
+static int list_modes(IDXGIOutput *output)
+{
+    UINT count=0;
+    HRESULT hr=IDXGIOutput_GetDisplayModeList(output,DXGI_FORMAT_R8G8B8A8_UNORM,0,&count,NULL);
+    if (FAILED(hr) || !count || count>4096) return 1;
+    DXGI_MODE_DESC *modes=calloc(count,sizeof(*modes));
+    if (!modes) return 1;
+    hr=IDXGIOutput_GetDisplayModeList(output,DXGI_FORMAT_R8G8B8A8_UNORM,0,&count,modes);
+    if (SUCCEEDED(hr)) {
+        for (UINT i=0;i<count;++i)
+            printf("available=%ux%u refresh=%u/%u\n",modes[i].Width,modes[i].Height,
+                   modes[i].RefreshRate.Numerator,modes[i].RefreshRate.Denominator);
+    }
+    free(modes);
+    return FAILED(hr);
+}
 
 static LRESULT CALLBACK wndproc(HWND w, UINT m, WPARAM a, LPARAM b)
 {
@@ -40,14 +61,33 @@ static int geometry(HWND window, IDXGISwapChain *chain, unsigned width, unsigned
            mode.dmPelsWidth!=width || mode.dmPelsHeight!=height;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-    const unsigned sizes[][2] = {{1512,982},{1920,1080},{1920,1200},{1512,982}};
+    unsigned sizes[MAX_TESTS][2], test_count=0;
+    int list_only=argc==2 && !strcmp(argv[1],"--list-modes");
+    if (!list_only) {
+        if (argc<2 || argc>MAX_TESTS+1) {
+            fprintf(stderr,"Usage: fullscreen-probe.exe --list-modes | WIDTHxHEIGHT [WIDTHxHEIGHT ...]\n");
+            return 2;
+        }
+        for (int arg=1;arg<argc;++arg) {
+            char trailing;
+            unsigned width,height;
+            if (sscanf(argv[arg],"%ux%u%c",&width,&height,&trailing)!=2 ||
+                width<640 || width>7680 || height<480 || height>4320) {
+                fprintf(stderr,"Invalid resolution: %s\n",argv[arg]);return 2;
+            }
+            sizes[test_count][0]=width;sizes[test_count++][1]=height;
+        }
+    }
+    DEVMODEW initial={0};initial.dmSize=sizeof(initial);
+    if (!EnumDisplaySettingsW(NULL,ENUM_CURRENT_SETTINGS,&initial)) return 2;
+    printf("initial-desktop=%lux%lu refresh=%lu\n",initial.dmPelsWidth,initial.dmPelsHeight,initial.dmDisplayFrequency);
     WNDCLASSW wc = {0}; wc.lpfnWndProc=wndproc; wc.hInstance=GetModuleHandleW(NULL);
     wc.lpszClassName=L"DeadlockFullscreenProbe";
     if (!RegisterClassW(&wc)) return 1;
     HWND window=CreateWindowW(wc.lpszClassName,L"Deadlock fullscreen regression probe",
-                              WS_OVERLAPPEDWINDOW|WS_VISIBLE,100,100,640,400,NULL,NULL,wc.hInstance,NULL);
+                              WS_OVERLAPPEDWINDOW|(list_only?0:WS_VISIBLE),100,100,640,400,NULL,NULL,wc.hInstance,NULL);
     if (!window) return 2;
     DXGI_SWAP_CHAIN_DESC desc = {0};
     desc.BufferDesc.Width=640;desc.BufferDesc.Height=400;desc.BufferDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -62,13 +102,17 @@ int main(void)
     if (FAILED(hr)) {printf("create=%08lx\n",hr);failed=1;goto done;}
     hr=IDXGISwapChain_GetContainingOutput(chain,&output);
     if (FAILED(hr)) {failed=2;goto done;}
-    for (unsigned test=0;test<sizeof(sizes)/sizeof(sizes[0]);++test) {
+    if (list_only) {failed=list_modes(output);goto done;}
+    for (unsigned test=0;test<test_count;++test) {
         DXGI_MODE_DESC request={0}, matched={0};
         request.Width=sizes[test][0];request.Height=sizes[test][1];request.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
         hr=IDXGIOutput_FindClosestMatchingMode(output,&request,&matched,(IUnknown *)device);
         printf("mode[%u] match=%08lx actual=%ux%u refresh=%u/%u\n",test,hr,matched.Width,matched.Height,
                matched.RefreshRate.Numerator,matched.RefreshRate.Denominator);fflush(stdout);
-        if (FAILED(hr) || matched.Width!=request.Width || matched.Height!=request.Height) {failed++;continue;}
+        if (FAILED(hr) || matched.Width!=request.Width || matched.Height!=request.Height) {
+            printf("UNSUPPORTED: requested=%ux%u; no replacement is accepted\n",request.Width,request.Height);
+            failed++;continue;
+        }
         hr=IDXGISwapChain_ResizeBuffers(chain,2,matched.Width,matched.Height,matched.Format,DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
         if (FAILED(hr)) {printf("ResizeBuffers=%08lx\n",hr);failed++;break;}
         hr=IDXGISwapChain_SetFullscreenState(chain,TRUE,output);
@@ -106,6 +150,14 @@ done:
     if (context) ID3D11DeviceContext_Release(context);
     if (device) ID3D11Device_Release(device);
     DestroyWindow(window);
+    pump();
+    DEVMODEW restored={0};restored.dmSize=sizeof(restored);
+    if (!EnumDisplaySettingsW(NULL,ENUM_CURRENT_SETTINGS,&restored) ||
+        restored.dmPelsWidth!=initial.dmPelsWidth || restored.dmPelsHeight!=initial.dmPelsHeight ||
+        restored.dmDisplayFrequency!=initial.dmDisplayFrequency) {
+        printf("FAIL: desktop mode was not restored\n");failed++;
+    }
+    printf("restored-desktop=%lux%lu refresh=%lu\n",restored.dmPelsWidth,restored.dmPelsHeight,restored.dmDisplayFrequency);
     printf("failures=%d; API/geometry probe only, visual coverage is separate\n",failed);
     return failed?1:0;
 }

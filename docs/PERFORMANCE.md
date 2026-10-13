@@ -27,16 +27,53 @@ these overrides on the next restart. Normal shader caches are preserved.
 ## Display and quality
 
 Reach the menu using the normal Steam launch before changing display settings.
-For the 1080p comparison, choose custom 1920×1080 in the game and record the window
-mode, refresh rate, quality, upscaler and render scale. Output resolution alone does
+Choose a mode actually offered by the display and record the window
+mode, refresh rate, quality, upscaler and render scale. The tested built-in Wine
+mode list did not offer exact 1920×1080; a substituted 1920×1200 is not a 1080p pass.
+Output resolution alone does
 not establish native rendering resolution. Our initial fresh-install baseline was
 1512×982 borderless with a saved render scale of approximately 73%, not native 1080p.
 
-The optional `graphics-preset` command previews a narrow 1080p fullscreen edit;
+The optional `graphics-preset --mode borderless --width WIDTH --height HEIGHT`
+command previews a narrow display edit (also accepts `--mode fullscreen`);
 `--apply` requires Steam/Wine closed and backs up the original configuration first.
 It supports only the tested video schema and a single account's configuration.
 It preserves quality/render scale and is not a complete graphics-quality preset.
 Prefer the in-game menu when investigating display-mode failures.
+
+### Experimental high-resolution borderless / Retina
+
+On the tested built-in M2 Max display, Wine's default desktop is 1512×982.
+Enabling its Retina setting exposes a 3024×1964 desktop without changing the
+macOS desktop scale. Borderless can use that desktop size while internal rendering
+resolution is controlled separately by the game's upscaler/render scale. It does
+not make arbitrary borderless output dimensions equivalent to desktop resolution,
+and native output alone does not prove native internal rendering or steady 60 FPS.
+
+With Windows Steam and all Wine apps closed:
+
+```sh
+python3 bin/deadlock-mac retina                    # saved setting only
+python3 bin/deadlock-mac retina --set on           # preview
+python3 bin/deadlock-mac retina --set on --apply    # apply; returns backup ID
+# Example for this display only; choose the current display's actual dimensions:
+python3 bin/deadlock-mac graphics-preset --mode borderless --width 3024 --height 1964 --apply
+python3 bin/deadlock-mac launch --game-mode-tool /absolute/path/to/gamepolicyctl
+```
+
+The app exposes Retina status/enable/disable under Display settings. This is
+opt-in and experimental, pending visible coverage, pointer alignment, Command–Tab,
+quit/relaunch and performance acceptance. It affects the whole Wine bottle,
+including Steam, and takes effect on restart. It does not change macOS preferences.
+For CrossOver, use its own Retina control.
+
+Only `RetinaMode` in Wine's version-2 user registry is edited. An atomic update
+preserves other keys, rejects unknown/duplicate settings and refuses live Wine or
+a changed registry. Backups contain that one setting, not Steam account data.
+With Steam/Wine closed, `retina --restore BACKUP_ID --apply` restores its previous
+value; `retina --set default --apply` removes the override. Video configuration
+backups are separate under `DeadlockData/settings-backups/`. Disabling Retina also
+requires selecting a resolution appropriate for the non-Retina desktop.
 
 ## Measure gameplay separately
 

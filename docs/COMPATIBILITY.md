@@ -205,3 +205,18 @@ A standalone DXGI geometry probe successfully entered/restored 1512×982 and
 was not counted as a pass. Native API geometry alone does not prove visible
 coverage, focus behavior, or Deadlock correctness. The first probe revision used
 an incorrect resize ordering and timed out; it is not evidence against the runtime.
+
+The 14:17 Pacific cold launch requested 1920×1200 fullscreen after clearing the
+saved borderless flag. The user still observed cropping/blank space and reported
+being unable to switch away until the game exited. The game later saved
+`nowindowborder=1` again. Clearing that flag is therefore not a validated fix or
+an established explanation of the defect. At 14:39 the process ended and Game
+Mode restored to `auto`; no unhandled exception was found in that run's saved log.
+
+The user accepted high-resolution borderless as an alternative. With Steam and
+Wine stopped, enabling `RetinaMode=y` changed the probe's reported desktop from
+1512×982 to 3024×1964 at 120 Hz. Both mode-list probes exited successfully and
+preserved their starting desktop. Deadlock was launched through Steam at 14:42
+with 3024×1964 borderless and Game Mode on. Visual/input/app-switching acceptance
+and performance for this configuration are still pending. No fullscreen fix,
+external-display support or sustained native-resolution frame rate is claimed.

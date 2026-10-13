@@ -111,7 +111,9 @@ questions remain; do not infer CPU/GPU bottlenecks or throttling from heat alone
 
 ## Fullscreen/display matrix
 
-Borderless is a recovery path, not completion of fullscreen support. For each
+Fullscreen and high-resolution borderless are separate qualification targets.
+The user prioritized high-resolution borderless after the fullscreen coverage and
+focus failures; a borderless pass must not be reported as a fullscreen fix. For each
 advertised resolution, separately test cold startup, in-game change from a smaller
 and larger mode, focus away/back, pointer hit-testing at all screen edges, clean
 quit, relaunch and restoration of the desktop. Record requested and actual output
@@ -125,6 +127,22 @@ its own test window. A successful HRESULT is insufficient: geometry must match
 and visible coverage still requires observation. An unsupported requested mode
 must not silently become a passing test of a different mode. A hung test is a
 failure; keep its log and restore the desktop before proceeding.
+
+Compile it with the pinned LLVM-MinGW toolchain, linking `d3d11`, `dxgi`,
+`dxguid` and `user32`. Run it with the selected profile's complete environment
+(including DXMT and any reviewed overlay), after closing Deadlock. First run
+`fullscreen-probe.exe --list-modes`, then pass an explicit sequence such as
+`fullscreen-probe.exe 1512x982 1920x1200 1800x1125 1512x982`, using only dimensions
+actually enumerated for that display. The probe fails if exact mode matching,
+geometry or desktop-resolution/refresh restoration fails. Listing modes does not
+change display mode. The current probe targets the display containing its initial
+window at (100, 100); selecting a non-primary external display is still future
+work, not implied by a pass on the built-in display.
+
+The initial built-in-display probe accepted 1512×982 and 1920×1200 but matched
+1920×1080 to 1920×1200, which was recorded as unsupported rather than passed.
+These were API/geometry results only. The real game's fullscreen cold launch,
+pointer alignment, focus recovery and clean exit remain separate acceptance steps.
 
 ## Distribution gate
 

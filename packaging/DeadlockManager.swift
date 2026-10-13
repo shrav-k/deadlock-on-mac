@@ -176,6 +176,13 @@ struct ContentView: View {
                 }.padding(5).disabled(model.running)
                 Text("Close Windows Steam before applying. Use a resolution supported by your display; graphics quality and render scale are preserved.")
                     .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("Retina status") { model.run(["retina"], label: "Reading Wine Retina setting…") }
+                    Button("Enable Retina") { model.run(["retina", "--set", "on", "--apply"], label: "Backing up and enabling Retina…") }
+                    Button("Disable Retina") { model.run(["retina", "--set", "off", "--apply"], label: "Backing up and disabling Retina…") }
+                }.padding(5).disabled(model.running)
+                Text("Experimental: Retina exposes full pixel resolution for high-resolution borderless play. Requires Steam closed and affects this whole Wine bottle. Verify screen coverage, pointer alignment and app switching after restart.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             DisclosureGroup("Wine exit hotfix") {
                 HStack {

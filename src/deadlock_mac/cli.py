@@ -22,6 +22,7 @@ from . import game_session
 from . import game_exit
 from . import hotfix
 from . import benchmark
+from . import wine_display
 from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
@@ -244,6 +245,11 @@ def main(argv=None):
     p.add_argument("--mode", choices=("fullscreen", "borderless"), default="fullscreen")
     p.add_argument("--width", type=int, default=1920)
     p.add_argument("--height", type=int, default=1080)
+    p = sub.add_parser("retina", help="Preview or apply a backed-up Wine Retina setting; Steam must be closed")
+    action = p.add_mutually_exclusive_group()
+    action.add_argument("--set", choices=("on", "off", "default"))
+    action.add_argument("--restore", help="Backup ID returned by an earlier Retina edit")
+    p.add_argument("--apply", action="store_true")
     p = sub.add_parser("performance-report", help="Summarize Metal HUD frame intervals for a game PID")
     p.add_argument("--log", type=Path, required=True)
     p.add_argument("--pid", type=int, required=True)
@@ -310,7 +316,7 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina"):
             profile = load_profile(workspace, args.profile)
         if args.command == "runtime-dependencies":
             result = engine_dependencies(profile)
@@ -344,6 +350,9 @@ def main(argv=None):
             elif args.command == "graphics-preset":
                 print(json.dumps(game_settings.configure(workspace, profile, apply=args.apply,
                                                         mode=args.mode, width=args.width, height=args.height), indent=2))
+            elif args.command == "retina":
+                print(json.dumps(wine_display.configure(workspace, profile, args.set,
+                                                        apply=args.apply, restore=args.restore), indent=2))
             elif args.command == "performance":
                 settings = performance.load(workspace, args.profile)
                 if args.reset:
