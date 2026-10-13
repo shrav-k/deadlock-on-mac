@@ -151,3 +151,11 @@ class GameModeTests(unittest.TestCase):
             with self.assertRaises(ManagerError), patch.object(game_mode, 'process_identity') as identity:
                 game_mode.trial(Tool(), 42, seconds, self.receipt)
             identity.assert_not_called()
+
+    def test_discovery_requires_one_exact_game_executable(self):
+        processes = '10 C:\\Steam\\steam.exe\n42 C:\\Steam\\Deadlock\\deadlock.exe\n99 /Applications/Deadlock Manager\n'
+        self.assertEqual(game_mode.select_game(processes), 42)
+        for invalid in ('', '42 /tmp/deadlock.exe\n', processes + '43 C:\\Other\\deadlock.exe\n',
+                        '42 C:\\Deadlock\\deadlock.exe-helper\n'):
+            with self.assertRaises(ManagerError):
+                game_mode.select_game(invalid)

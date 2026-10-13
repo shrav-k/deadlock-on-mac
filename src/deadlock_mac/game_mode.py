@@ -74,6 +74,25 @@ def process_identity(pid):
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def find_game():
+    result = subprocess.run(["/bin/ps", "-ww", "-axo", "pid=,comm="],
+                            capture_output=True, text=True, timeout=5, env=clean_env())
+    if result.returncode:
+        raise ManagerError("Could not inspect running game processes.")
+    return select_game(result.stdout)
+
+
+def select_game(processes):
+    candidates = []
+    for line in processes.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].lower().endswith("\\deadlock.exe"):
+            candidates.append(int(parts[0]))
+    if len(candidates) != 1:
+        raise ManagerError("Expected exactly one running Deadlock game. Launch it through Steam first; use --test-pid when comparing multiple instances.")
+    return candidates[0]
+
+
 def restore(tool, receipt):
     """Restore a recorded test, preserving a later explicit off/auto policy."""
     receipt = no_symlinks(receipt)

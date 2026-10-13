@@ -106,11 +106,15 @@ an explicit `--tool /absolute/path/to/gamepolicyctl` is also supported. The mana
 checks Apple's code signature and tool identifier before executing it, rejects
 unknown status formats, and neither downloads nor distributes Apple's binary.
 
-For an explicit comparison, supply the **native PID of the running Deadlock**:
+For an explicit comparison, start Deadlock through Steam and let the manager
+identify the one running game:
 
 ```sh
-python3 bin/deadlock-mac game-mode --test-pid 12345 --seconds 300
+python3 bin/deadlock-mac game-mode --test --seconds 300
 ```
+
+Advanced comparisons can supply `--test-pid 12345` instead. The app preview has
+equivalent tool selection, status, five-minute test, stop and recovery controls.
 
 This changes a **system-wide policy**, not an individual game's preference. Start
 only with automatic policy and run one test at a time. The command stays running

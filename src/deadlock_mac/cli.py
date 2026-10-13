@@ -226,6 +226,7 @@ def main(argv=None):
     p = sub.add_parser("game-mode", help="Optional Apple Game Mode status or bounded system-wide diagnostic test")
     p.add_argument("--tool", type=Path, help="Compatible Apple-signed gamepolicyctl; otherwise discover through Xcode")
     action = p.add_mutually_exclusive_group()
+    action.add_argument("--test", action="store_true", help="Find the one running Deadlock process and start a bounded test")
     action.add_argument("--test-pid", type=int, help="Native deadlock.exe PID; temporarily force Game Mode on")
     action.add_argument("--restore", action="store_true", help="Recover the previous automatic policy after an interrupted test")
     p.add_argument("--seconds", type=int, default=300, help="Test duration, at most 900 seconds")
@@ -250,7 +251,7 @@ def main(argv=None):
             return 0
         if args.command == "game-mode":
             tool = game_mode.AppleTool(args.tool)
-            if args.test_pid is None and not args.restore:
+            if args.test_pid is None and not args.test and not args.restore:
                 print(json.dumps(tool.status(), indent=2))
                 return 0
             with lock(workspace / "DeadlockData"):
@@ -258,7 +259,8 @@ def main(argv=None):
                 if args.restore:
                     print(json.dumps(game_mode.restore(tool, receipt), indent=2))
                 else:
-                    game_mode.trial(tool, args.test_pid, args.seconds, receipt,
+                    pid = game_mode.find_game() if args.test else args.test_pid
+                    game_mode.trial(tool, pid, args.seconds, receipt,
                                     report=lambda message: print(message, flush=True))
             return 0
         if args.command == "profiles":

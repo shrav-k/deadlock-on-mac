@@ -9,6 +9,29 @@ final class ManagerModel: ObservableObject {
     @Published var running = false
     @Published var status = "Ready to set up Windows Steam."
     @Published var output = ""
+    @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
+    @Published var testingGameMode = false
+    private var activeProcess: Process?
+
+    func chooseGameModeTool() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.prompt = "Use Apple tool"
+        panel.message = "Choose a compatible gamepolicyctl from Apple's developer tools. Its Apple signature will be checked before use."
+        if panel.runModal() == .OK, let url = panel.url {
+            gameModeTool = url.path
+            UserDefaults.standard.set(url.path, forKey: "gameModeTool")
+        }
+    }
+
+    func gameMode(_ arguments: [String] = []) {
+        let tool = gameModeTool.isEmpty ? [] : ["--tool", gameModeTool]
+        run(["game-mode"] + tool + arguments,
+            label: arguments.contains("--test") ? "Game Mode test running; keep this app open." : "Checking Game Mode…")
+    }
+
+    func stopGameModeTest() { activeProcess?.terminate() }
 
     func chooseWorkspace() {
         let panel = NSOpenPanel()
@@ -22,6 +45,7 @@ final class ManagerModel: ObservableObject {
     func run(_ command: [String], label: String) {
         guard !running, let resources = Bundle.main.resourceURL else { return }
         running = true
+        testingGameMode = command.contains("game-mode") && command.contains("--test")
         status = label
         output = ""
         let selectedWorkspace = workspace
@@ -42,6 +66,7 @@ final class ManagerModel: ObservableObject {
             process.standardInput = FileHandle.nullDevice
             do {
                 try process.run()
+                await MainActor.run { self.activeProcess = process }
                 while true {
                     let data = pipe.fileHandleForReading.availableData
                     if data.isEmpty { break }
@@ -52,18 +77,21 @@ final class ManagerModel: ObservableObject {
                 let code = process.terminationStatus
                 await MainActor.run {
                     self.running = false
+                    self.testingGameMode = false
+                    self.activeProcess = nil
                     let messages = ["bootstrap": "Steam installed. Open Steam and allow it to update.",
                                     "steam": "Steam is starting. First startup may take a few minutes before sign-in appears.",
                                     "install": "Install request sent. Complete the download in Steam.",
                                     "launch": "Play request sent. Check the game window.",
                                     "performance": "Settings saved. Restart Windows Steam for them to apply.",
-                                    "graphics-preset": "Display settings saved with a backup. Verify them in the game."]
+                                    "graphics-preset": "Display settings saved with a backup. Verify them in the game.",
+                                    "game-mode": "Game Mode operation finished. Check the policy in Details."]
                     self.status = code == 0 ? (messages[command.first ?? ""] ?? "Check complete.")
                         : "This step could not finish. See details below (code \(code))."
                 }
             } catch {
                 let message = error.localizedDescription
-                await MainActor.run { self.running = false; self.status = message }
+                await MainActor.run { self.running = false; self.testingGameMode = false; self.activeProcess = nil; self.status = message }
             }
         }
     }
@@ -117,6 +145,25 @@ struct ContentView: View {
             }.disabled(model.running)
             Text("Exit Windows Steam before changing test settings. Apply 1080p after the game has run once.")
                 .font(.caption).foregroundStyle(.secondary)
+            GroupBox("Game Mode · optional comparison") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Button("Choose Apple tool…") { model.chooseGameModeTool() }.disabled(model.running)
+                        Text(model.gameModeTool.isEmpty ? "Uses the selected Xcode's gamepolicyctl" : model.gameModeTool)
+                            .font(.caption).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    }
+                    HStack {
+                        Button("Check Game Mode") { model.gameMode() }.disabled(model.running)
+                        Button("Test for 5 minutes") { model.gameMode(["--test", "--seconds", "300"]) }.disabled(model.running)
+                        Button("Restore interrupted test") { model.gameMode(["--restore"]) }.disabled(model.running)
+                        if model.testingGameMode {
+                            Button("Stop test and restore") { model.stopGameModeTest() }
+                        }
+                    }
+                    Text("Start Deadlock first. The test changes a system-wide policy, then restores it on game exit or timeout. Confirm On in the game HUD. A compatible Apple developer tool is required; normal Play works without it.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }.padding(5)
+            }
             HStack {
                 if model.running { ProgressView().controlSize(.small) }
                 Text(model.status).font(.callout).textSelection(.enabled)
@@ -132,7 +179,7 @@ struct ContentView: View {
             }
             Text("Experimental: startup/exit faults and performance are under investigation. This local build is not a signed, notarized player release.")
                 .font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(minWidth: 800, minHeight: 650)
+        }.padding(24).frame(minWidth: 800, minHeight: 800)
     }
 }
 

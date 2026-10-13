@@ -21,6 +21,17 @@ experiments preserve the existing setup.
 
 ## Start here
 
+Use the [complete installation and Game Mode guide](docs/INSTALL.md). **This work
+is currently on `maintain/free-steam-runtime-manager`; the fork's default `main`
+branch still contains the original installer.** Clone the maintained branch:
+
+```sh
+mkdir -p ~/Projects/Games/Deadlock
+cd ~/Projects/Games/Deadlock
+git clone --branch maintain/free-steam-runtime-manager https://github.com/shrav-k/deadlock-on-mac.git
+cd deadlock-on-mac
+```
+
 Place the repository inside `Projects/Games/Deadlock`. Requires Apple Silicon, macOS 15+,
 Rosetta 2 and Python 3.12+. Review [security boundaries](SECURITY.md), then:
 
@@ -46,6 +57,10 @@ settings sync. [Installation and account guide](docs/INSTALL.md)
 The [native app preview](packaging/README.md) bundles Python and calls the same
 manager modules. It is currently a local development build, not a notarized download.
 For controlled performance tests, see the [60 FPS baseline guide](docs/PERFORMANCE.md).
+The app also exposes an optional five-minute Game Mode test using a compatible
+Apple developer tool. The user reported Mina's ultimate holding around 60 FPS
+without the earlier stutter with Game Mode on, and later reported a successful
+1920×1200 test. These short sandbox observations are not sustained-match guarantees.
 
 ## Layout
 
