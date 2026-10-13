@@ -14,8 +14,10 @@ is available yet.
 | Source checkout | The same, plus Git and Python 3.12+ | Clone the maintained branch, then run the commands below |
 | Build an app yourself | Source prerequisites plus a compatible Swift compiler/macOS SDK | Follow [app packaging](../packaging/README.md), then use the app sequence |
 
-Game Mode is optional and requires a compatible Apple-signed `gamepolicyctl`;
-the regular installation and Play flow do not require Xcode. On an existing
+Game Mode during Play is enabled by default and requires a compatible Apple-signed
+`gamepolicyctl`. Select it in the app's Game Mode panel before the first Play. To
+play without that tool, turn off **Enable during Play** or use the CLI's
+`launch --without-game-mode`. Installation itself does not require Xcode. On an existing
 working installation, skip setup/download and use Open Steam → Play. Do not
 bootstrap a running Wine environment.
 
@@ -62,7 +64,10 @@ python3 bin/deadlock-mac launch
 python3 bin/deadlock-mac doctor
 ```
 
-Alternatively select Deadlock in that Steam library and click Install or Play.
+Alternatively select Deadlock in that Steam library and click Install. Use the
+manager's **Play** for automatic Game Mode; clicking Steam's own Play button directly
+does not start the manager's watcher. If the game is already running, manager Play
+can attach the watcher without launching another copy.
 The manager always asks Steam to launch app **1422450**. The native Mac Steam
 client cannot install a native Mac version of Deadlock; Windows Steam inside Wine
 downloads Valve's Windows build. Keep the managed default Steam library for this
@@ -91,46 +96,77 @@ sandbox run was reported on the M2 Max after Game Mode was enabled; it is a usef
 comparison setting, not a guaranteed preset for every Mac. Record the upscaler and
 quality too. Vulkan has not been tested with this setup.
 
-## Enable Game Mode for a controlled test
+## Automatic Game Mode during Play
 
 First try Apple's native flow: while the game is in supported macOS fullscreen,
 open Game Overlay with Command–Esc and enable Game Mode in its settings. In our
 Wine test the overlay was unavailable, so we used Apple's developer tool instead.
 
 Use a `gamepolicyctl` from a compatible Apple developer-tool installation. A full
-Xcode installation is only relevant to obtaining that optional tool; it is not a
+Xcode installation is only relevant to obtaining that tool; it is not a
 game runtime dependency. Xcode 15's copy crashes on the tested macOS 26, so merely
 finding the filename is insufficient. The manager verifies Apple's signature,
 then checks whether the tool can actually report status. It does not redistribute
 or automatically download the binary.
 
-With Deadlock already running, the app's **Game Mode** panel provides:
+In the app's **Game Mode** panel:
 
 1. **Choose Apple tool…** if the selected Xcode's tool is absent or incompatible.
 2. **Check Game Mode** to read the policy without changing it.
-3. **Test for 5 minutes** to find the one running Deadlock process and enable the
-   system-wide policy temporarily. Confirm **Game Mode On** in the game's Metal HUD.
-4. **Stop test and restore** to finish early, or let the timer/game exit end it.
+3. Leave **Enable during Play, then restore when Deadlock exits** checked.
+4. Hit **Play**. Confirm **Game Mode On** in Deadlock's Metal HUD. You can close the
+   manager; its detached watcher keeps running until the actual game process exits.
+5. **Play session status** shows startup, game tracking and restoration. The
+   original policy (`auto`, `on` or `off`) is restored on exit. An original `on`
+   policy deliberately remains on afterward.
 
 The equivalent source commands are:
 
 ```sh
-python3 bin/deadlock-mac game-mode
-python3 bin/deadlock-mac game-mode --test --seconds 300
+python3 bin/deadlock-mac game-mode --tool /absolute/path/to/gamepolicyctl
+python3 bin/deadlock-mac launch --game-mode-tool /absolute/path/to/gamepolicyctl
+python3 bin/deadlock-mac game-mode --session
 ```
 
-For a tool outside the selected Xcode, add `--tool /absolute/path/to/gamepolicyctl`
-to each command. Keep the app/command running during the test. If it is force-killed
-or restoration fails, use **Restore interrupted test** or:
+Omit the tool argument only if the selected Xcode supplies a compatible copy.
+The app remembers your selection; source CLI invocations need the explicit argument
+each time when the selected Xcode's copy is incompatible. If the tool cannot be
+verified or enabled, Play reports the error before asking Steam to launch; it does
+not silently claim Game Mode is working. Use `--without-game-mode` as the explicit fallback.
+
+Normal Play has **no five-minute or other gameplay deadline**. A three-minute
+startup timeout applies only while waiting for a game process: finish Steam's
+login, download or update prompts, then press Play again. A per-user lock prevents
+overlapping manager sessions across workspaces. Game Mode is a system-wide policy;
+while active the watcher checks it and re-enables it if needed, then restores the
+exact original policy at exit. It does not change Wine, Steam or game files.
+
+If Wine holds a crashed process open in its debugger, close that error/debugger
+dialog too. A minimized game is still running and keeps Game Mode on. **End session
+and restore** explicitly cancels the override without killing the game or Steam:
 
 ```sh
-python3 bin/deadlock-mac game-mode --restore
+python3 bin/deadlock-mac game-mode --stop-session
 ```
 
-This is a bounded diagnostic with a recovery receipt, **not automatic Game Mode on
-every Play**. It starts only from automatic policy, lasts at most 15 minutes, and
-returns to automatic on normal termination. It preserves a later explicit off/auto
-choice. See [performance testing and recovery limits](PERFORMANCE.md#optional-game-mode-diagnostic).
+An uncatchable watcher kill, power loss or Apple-service failure can prevent cleanup.
+After the game exits, use **Recover interrupted Play** or:
+
+```sh
+python3 bin/deadlock-mac game-mode --restore-session
+```
+
+Recovery uses the saved, signature-checked tool. The next Play also recovers an
+interrupted session; if its game is still running in the same profile, it resumes
+watching without losing the original policy. The private recovery receipt lives at
+`~/Library/Application Support/Deadlock Manager/GameMode/session.json` so multiple
+workspaces cannot unknowingly overwrite each other's state. Session logs stay in
+the workspace's `DeadlockData/logs/<profile>`.
+
+The separate **Timed diagnostic** section still offers a five-minute comparison
+for an already running game launched without the automatic session. It requires
+automatic policy and never overlaps a normal Play watcher. See
+[diagnostics and recovery](PERFORMANCE.md#optional-game-mode-diagnostic).
 
 Repeat Mina's bat ultimate in Hero Sandbox at unchanged graphics settings. Our
 user reported around 60 FPS and the earlier stutter gone with Game Mode on; the

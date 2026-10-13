@@ -21,6 +21,7 @@ must not be described as proof that the game works out of the box.
 | `performance.py` | Validated per-profile FPS cap, Wine synchronization and Metal HUD settings |
 | `game_settings.py` | Narrow, offline display edits with backups; preserves quality and render scale |
 | `game_mode.py` | Optional Apple-tool status, bounded system-wide Game Mode tests and recovery receipts |
+| `game_session.py` / `session_worker.py` | Detached normal-Play lifetime, per-user policy ownership, bottle matching and prior-policy recovery |
 | `telemetry.py` | Per-process Metal presentation-interval summaries, excluding other apps and warm-up |
 | `cli.py` | Command orchestration, profile creation and selected diagnostics |
 | `packaging/` | SwiftUI shell, isolated bundled-Python entry point and pinned app build inputs |
@@ -72,12 +73,19 @@ Apple's separately licensed D3DMetal. Redistribution of LGPL components needs th
 corresponding source and license obligations satisfied. Packaging must not silently
 change a user's runtime, prefix, Steam account or Cloud-conflict decision.
 
-Game Mode remains an optional capability, independent of the Wine provider. Do
-not bundle a copied Apple developer executable or make Xcode a normal player
-prerequisite. Check the signature and actual tool compatibility, then retain the
-ordinary Steam launch when diagnostics are unavailable. Automatic native game
-identity/fullscreen integration and a supported distribution route must be
-validated before Game Mode can become part of the default Play flow.
+Game Mode remains independent of the Wine provider. Play uses it by default when
+configured with a compatible, signature-verified Apple tool, with an explicit
+opt-out for ordinary Steam launch. The Apple executable is not bundled. A detached
+isolated Python worker owns a per-user lock and recovery receipt outside the
+workspace, enables the system-wide policy, and asks the existing runtime adapter
+to launch through Steam. It matches native Windows game processes by executable
+name and bottle working directory (not their environment), then tracks PID plus
+start identity without a game-duration timer. The manager can close while it runs.
+Normal exit/signals restore the exact prior policy. A failed restore retains its
+receipt; recovery/re-adoption is explicit or happens on next Play. SIGKILL/power
+loss cannot guarantee immediate cleanup. Native Wine app identity/fullscreen
+integration and a supported Apple-tool distribution route remain future work;
+this lifecycle feature does not establish native per-game eligibility.
 
 ## Release gates
 

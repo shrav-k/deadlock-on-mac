@@ -57,8 +57,10 @@ settings sync. [Installation and account guide](docs/INSTALL.md)
 The [native app preview](packaging/README.md) bundles Python and calls the same
 manager modules. It is currently a local development build, not a notarized download.
 For controlled performance tests, see the [60 FPS baseline guide](docs/PERFORMANCE.md).
-The app also exposes an optional five-minute Game Mode test using a compatible
-Apple developer tool. The user reported Mina's ultimate holding around 60 FPS
+Play enables Game Mode using a compatible Apple developer tool, keeps it on for
+the game process's lifetime with **no play-time limit**, then restores the prior
+policy. Choose the tool once in the app; see the installation guide for CLI use,
+recovery and the explicit option to play without it. The user reported Mina's ultimate holding around 60 FPS
 without the earlier stutter with Game Mode on, and later reported a successful
 1920×1200 test. These short sandbox observations are not sustained-match guarantees.
 

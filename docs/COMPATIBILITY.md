@@ -8,7 +8,7 @@ Keep observed results distinct from upstream claims. Last updated 2026-10-13.
 | Same Mac; Wine Sikarugir 11.0_1 + DXMT 0.80 | Steam installs and self-updates | Login UI stays black, including software rendering | D3D11 probe passes; game not tested | Not tested |
 | Same Mac; official CrossOver 26.3.0 | App signature and notarization verified; trial opens | Not yet tested | Not yet tested | Not yet tested |
 
-Manager: 51 automated tests pass locally on Python 3.13.2. These are not game
+Manager: automated unit and lifecycle tests pass locally on Python 3.13.2. These are not game
 compatibility tests. The CrossOver trial started 2026-10-13; no purchase was made.
 
 Both free-runtime probes reported Apple M2 Max, feature level 11.0, successful
@@ -127,7 +127,8 @@ comparison. This remains a short, user-observed sandbox result with a warmer cac
 not a controlled causal benchmark or sustained-match/1080p acceptance. The mixed
 HUD interval retained focus gaps and some intervals above 16.67 ms; it does not
 establish perfect frame pacing. The optional bounded diagnostic is documented in
-[PERFORMANCE.md](PERFORMANCE.md). Automatic per-game activation remains unimplemented.
+[PERFORMANCE.md](PERFORMANCE.md). Native macOS recognition of the Wine game remains
+unimplemented; the manager now provides a separate lifetime-based Play watcher.
 
 The user subsequently reported successful testing at **1920×1200 with Game Mode
 on**. Exact frame statistics, duration and quality settings for that resolution
@@ -135,6 +136,24 @@ were not independently established. At 12:53:50 Pacific the game process ended;
 the temporary guard detected this and restored automatic policy, with the Apple
 tool confirming Game Mode off. This validates that live diagnostic's normal
 cleanup, not the separate cold-launch or exit-fault fixes.
+
+### Automatic Play lifecycle — 2026-10-13
+
+Normal manager Play now starts a detached Game Mode watcher. A live source-CLI
+launch at 13:10:28 Pacific saved `auto`, enabled `on`, asked Windows Steam to
+launch Deadlock, and matched its actual game process in the Highball bottle. The
+user confirmed Game Mode On. Wine faulted and kept the game process alive in its
+debugger; Game Mode stayed on beyond five minutes. After the user closed the error
+and debugger windows, the watcher detected process exit at 13:16:10 and restored
+`auto`; a separate Apple-tool check confirmed mode off. This validates lifecycle
+behavior, including a debugger-held process, not six minutes of stable gameplay.
+
+Automated lifecycle cases cover simulated multi-hour play, restoring `auto`/`on`/
+`off`, startup timeout, failed launch/enable, PID reuse, concurrent workers,
+interrupted-session adoption, failed restoration and explicit cancellation.
+The rebuilt native app retains the selected Apple tool and defaults its Play
+option on. Native macOS game classification and the existing Wine exit fault
+remain unresolved.
 
 For each live result add: date, macOS/chip/RAM, engine and graphics versions,
 Deadlock build ID, resolution/settings, test duration, what worked, what failed,

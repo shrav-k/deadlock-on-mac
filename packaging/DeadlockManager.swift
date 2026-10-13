@@ -11,6 +11,9 @@ final class ManagerModel: ObservableObject {
     @Published var output = ""
     @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
     @Published var testingGameMode = false
+    @Published var automaticGameMode = UserDefaults.standard.object(forKey: "automaticGameMode") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(automaticGameMode, forKey: "automaticGameMode") }
+    }
     private var activeProcess: Process?
 
     func chooseGameModeTool() {
@@ -32,6 +35,13 @@ final class ManagerModel: ObservableObject {
     }
 
     func stopGameModeTest() { activeProcess?.terminate() }
+
+    func play() {
+        var arguments = ["launch"]
+        if !automaticGameMode { arguments += ["--without-game-mode"] }
+        else if !gameModeTool.isEmpty { arguments += ["--game-mode-tool", gameModeTool] }
+        run(arguments, label: "Starting Deadlock through Steam…")
+    }
 
     func chooseWorkspace() {
         let panel = NSOpenPanel()
@@ -101,6 +111,7 @@ struct ContentView: View {
     @StateObject private var model = ManagerModel()
     @State private var showDetails = true
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
                 Image(systemName: "gamecontroller.fill").font(.system(size: 36)).foregroundStyle(.orange)
@@ -131,7 +142,7 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                 Button("2. Open Steam") { model.run(["steam"], label: "Opening Steam…") }
                 Button("3. Install Deadlock") { model.run(["install"], label: "Opening Deadlock in Steam…") }
-                Button("Play") { model.run(["launch"], label: "Requesting game launch through Steam…") }
+                Button("Play") { model.play() }
                 Spacer()
             }.controlSize(.large).disabled(model.running)
             Text("Complete Steam Guard in Steam. Cloud support depends on the game; resolve any sync conflicts yourself.")
@@ -145,8 +156,10 @@ struct ContentView: View {
             }.disabled(model.running)
             Text("Exit Windows Steam before changing test settings. Apply 1080p after the game has run once.")
                 .font(.caption).foregroundStyle(.secondary)
-            GroupBox("Game Mode · optional comparison") {
+            GroupBox("Game Mode") {
                 VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Enable during Play, then restore when Deadlock exits", isOn: $model.automaticGameMode)
+                        .disabled(model.running)
                     HStack {
                         Button("Choose Apple tool…") { model.chooseGameModeTool() }.disabled(model.running)
                         Text(model.gameModeTool.isEmpty ? "Uses the selected Xcode's gamepolicyctl" : model.gameModeTool)
@@ -154,14 +167,21 @@ struct ContentView: View {
                     }
                     HStack {
                         Button("Check Game Mode") { model.gameMode() }.disabled(model.running)
-                        Button("Test for 5 minutes") { model.gameMode(["--test", "--seconds", "300"]) }.disabled(model.running)
-                        Button("Restore interrupted test") { model.gameMode(["--restore"]) }.disabled(model.running)
+                        Button("Play session status") { model.gameMode(["--session"]) }.disabled(model.running)
+                        Button("Recover interrupted Play") { model.gameMode(["--restore-session"]) }.disabled(model.running)
+                        Button("End session and restore") { model.gameMode(["--stop-session"]) }.disabled(model.running)
                         if model.testingGameMode {
                             Button("Stop test and restore") { model.stopGameModeTest() }
                         }
                     }
-                    Text("Start Deadlock first. The test changes a system-wide policy, then restores it on game exit or timeout. Confirm On in the game HUD. A compatible Apple developer tool is required; normal Play works without it.")
+                    Text("Play keeps Game Mode on until the game exits, with no time limit. You can close this manager. The previous system-wide policy is restored afterward. Choose a compatible Apple tool and confirm On in the game HUD.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    DisclosureGroup("Timed diagnostic (separate from Play)") {
+                        HStack {
+                            Button("Test for 5 minutes") { model.gameMode(["--test", "--seconds", "300"]) }.disabled(model.running)
+                            Button("Restore interrupted test") { model.gameMode(["--restore"]) }.disabled(model.running)
+                        }
+                    }.font(.caption)
                 }.padding(5)
             }
             HStack {
@@ -174,12 +194,13 @@ struct ContentView: View {
                     Text(model.output.isEmpty ? "No operation has run in this window." : model.output)
                         .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                }.frame(minHeight: 100, maxHeight: .infinity)
+                }.frame(height: 180)
                     .background(.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
             Text("Experimental: startup/exit faults and performance are under investigation. This local build is not a signed, notarized player release.")
                 .font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(minWidth: 800, minHeight: 800)
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(minWidth: 800, minHeight: 740)
     }
 }
 

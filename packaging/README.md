@@ -22,10 +22,13 @@ Install Deadlock → Play**. Steam owns sign-in, Steam Guard, game installation 
 updates. First Steam startup can take several minutes. Performance changes require
 Windows Steam to be closed; configure resolution after the game has run once.
 
-The **Game Mode** panel can select a compatible Apple-signed `gamepolicyctl`,
-inspect status, start a five-minute test for the one running Deadlock process,
-stop/restore, and recover an interrupted test. The tool is not included in the
-app and is not required for ordinary Play. Keep the app open during the test.
+The **Game Mode** panel selects a compatible Apple-signed `gamepolicyctl`. With
+**Enable during Play** checked (the default), Play keeps Game Mode on for the
+actual game process's lifetime, then restores the prior policy. There is no
+play-time limit and the detached watcher survives closing this app. Status,
+explicit end/restore and interrupted-Play recovery controls are included. The
+Apple tool is not bundled; uncheck the option to play without it. The separate
+collapsed diagnostic section retains the timed test and its recovery controls.
 See the complete [installation and Game Mode guide](../docs/INSTALL.md).
 
 The bundled Python interpreter runs with `-I -B`, an explicit manager import path,

@@ -18,6 +18,8 @@
   record first-launch failure and a successful normal Steam retry separately.
 - Add optional Apple-signed Game Mode tool diagnostics, bounded comparisons and
   interrupted-test recovery; record the user-observed Mina sandbox improvement.
+- Make manager Play own a detached Game Mode session with no gameplay deadline,
+  prior-policy restoration, bottle/PID matching, concurrency protection and recovery.
 
 Forked from `0ximu/deadlock-on-mac` at
 `aedcd5128613b6f94e228d6258840b33fdb53782`. Original history and MIT attribution

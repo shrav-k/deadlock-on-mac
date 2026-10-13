@@ -1,7 +1,6 @@
-"""Optional Apple developer-tool diagnostics, independent of the Wine adapter.
+"""Apple tool verification and timed diagnostics; Play lifetime is in game_session.
 
-Game Mode's policy is system-wide. A bounded test is never a launch default and
-does not establish that an anonymous Wine process receives per-game priority.
+The system-wide policy does not establish native per-game eligibility under Wine.
 """
 from datetime import datetime, timezone
 import json

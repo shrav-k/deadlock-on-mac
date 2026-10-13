@@ -99,14 +99,21 @@ The optional CLI can inspect the Apple tool selected by Xcode:
 python3 bin/deadlock-mac game-mode
 ```
 
-Normal Steam/game launch does not require this tool or Xcode. An older tool can
+Play enables a background Game Mode session by default; see the
+[installation guide](INSTALL.md#automatic-game-mode-during-play). It saves the
+original policy, enables before requesting Steam launch, follows only game
+processes inside the selected bottle, and restores on actual exit. Closing the
+manager or CLI does not end this watcher. There is no gameplay deadline; the
+three-minute startup timeout only covers a game that never starts. The explicit
+`launch --without-game-mode` path does not require this tool or Xcode. An older tool can
 fail before execution on a newer macOS: Xcode 15's tool failed to load a GamePolicy
 symbol on our macOS 26 machine. Use a compatible Apple developer-tool installation;
 an explicit `--tool /absolute/path/to/gamepolicyctl` is also supported. The manager
 checks Apple's code signature and tool identifier before executing it, rejects
 unknown status formats, and neither downloads nor distributes Apple's binary.
 
-For an explicit comparison, start Deadlock through Steam and let the manager
+For a separate timed comparison, start Deadlock through Steam with automatic
+Game Mode disabled and let the manager
 identify the one running game:
 
 ```sh
@@ -124,7 +131,9 @@ resolution and quality unchanged; confirm Game Mode in the HUD and repeat the sa
 ability sequence. This is deliberately separate from normal Play and does not
 modify Wine, Steam or game files.
 
-Recovery is recorded before enabling in `DeadlockData/game-mode-test.json`.
+Recovery is recorded before enabling in
+`~/Library/Application Support/Deadlock Manager/GameMode/game-mode-test.json`.
+Older workspace-local `DeadlockData/game-mode-test.json` receipts remain recoverable.
 An uncatchable process kill, power loss, or Apple-service failure can prevent
 automatic cleanup. After such an interruption, use:
 
@@ -137,7 +146,8 @@ explicit `off` or `auto` choice; another actor setting `on` cannot be distinguis
 from this test's override. A pending recovery blocks a new test. Do not infer
 successful restoration from process exit alone—check the reported policy.
 
-For automatic per-game activation, the remaining work is Wine app identity and
+The new Play watcher uses Apple's system-wide override. For macOS to recognize
+the Wine game and activate Game Mode natively, the remaining work is Wine app identity and
 native fullscreen integration. Adding game metadata only to the manager's UI does
 not establish that the Steam-launched child game becomes eligible. See
 [Apple's game identification guidance](https://developer.apple.com/forums/thread/739387)

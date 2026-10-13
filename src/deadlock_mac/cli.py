@@ -18,6 +18,7 @@ from .diagnostics import engine_dependencies, power_status
 from . import performance
 from . import game_settings
 from . import game_mode
+from . import game_session
 from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
@@ -205,6 +206,9 @@ def main(argv=None):
     for action in ("steam", "install", "launch"):
         p = sub.add_parser(action)
         p.add_argument("--dry-run", action="store_true", help="Print argv without executing anything")
+        if action == "launch":
+            p.add_argument("--game-mode-tool", type=Path, help="Compatible Apple-signed gamepolicyctl for the Play session")
+            p.add_argument("--without-game-mode", action="store_true", help="Explicitly launch without a Game Mode session")
     sub.add_parser("doctor", help="Print a shareable allowlisted report; never reads Steam credentials")
     sub.add_parser("runtime-dependencies", help="Inspect direct Wine module imports for missing host libraries")
     sub.add_parser("backup", help="Snapshot Deadlock data while all Steam/Wine processes are closed")
@@ -223,12 +227,15 @@ def main(argv=None):
     p.add_argument("--warmup-seconds", type=float, default=0)
     p.add_argument("--start-time", help="Local ISO time when the gameplay segment started (no UTC offset)")
     p.add_argument("--end-time", help="Exclusive local ISO end time, to exclude later menus or settings")
-    p = sub.add_parser("game-mode", help="Optional Apple Game Mode status or bounded system-wide diagnostic test")
+    p = sub.add_parser("game-mode", help="Apple Game Mode status, Play recovery or a bounded diagnostic")
     p.add_argument("--tool", type=Path, help="Compatible Apple-signed gamepolicyctl; otherwise discover through Xcode")
     action = p.add_mutually_exclusive_group()
     action.add_argument("--test", action="store_true", help="Find the one running Deadlock process and start a bounded test")
     action.add_argument("--test-pid", type=int, help="Native deadlock.exe PID; temporarily force Game Mode on")
     action.add_argument("--restore", action="store_true", help="Recover the previous automatic policy after an interrupted test")
+    action.add_argument("--session", action="store_true", help="Read the normal Play session receipt")
+    action.add_argument("--restore-session", action="store_true", help="Restore an interrupted Play session after the game exits")
+    action.add_argument("--stop-session", action="store_true", help="Explicitly end Game Mode and restore now, without closing the game")
     p.add_argument("--seconds", type=int, default=300, help="Test duration, at most 900 seconds")
     args = parser.parse_args(argv)
     workspace = args.workspace.expanduser().resolve()
@@ -250,12 +257,23 @@ def main(argv=None):
                                            args.start_time, args.end_time), indent=2))
             return 0
         if args.command == "game-mode":
+            if args.session:
+                print(json.dumps(game_session.status(), indent=2))
+                return 0
+            if args.restore_session:
+                print(json.dumps(game_session.recover(), indent=2))
+                return 0
+            if args.stop_session:
+                print(json.dumps(game_session.stop_session(), indent=2))
+                return 0
             tool = game_mode.AppleTool(args.tool)
             if args.test_pid is None and not args.test and not args.restore:
                 print(json.dumps(tool.status(), indent=2))
                 return 0
-            with lock(workspace / "DeadlockData"):
-                receipt = workspace / "DeadlockData/game-mode-test.json"
+            with lock(game_session.state_directory()), lock(workspace / "DeadlockData"):
+                if game_session.read_state().get("restore_pending"):
+                    raise ManagerError("A Play session needs game-mode --restore-session or Play to resume it first.")
+                receipt = game_session.pending_trial(workspace) or game_session.trial_receipts(workspace)[0]
                 if args.restore:
                     print(json.dumps(game_mode.restore(tool, receipt), indent=2))
                 else:
@@ -281,6 +299,7 @@ def main(argv=None):
         if getattr(args, "dry_run", False):
             print(json.dumps({"argv": launch_command(profile, args.command),
                               "performance_requested": performance.load(workspace, profile["id"]),
+                              "game_mode_session": args.command == "launch" and not args.without_game_mode,
                               "provider": profile["provider"], "executes": False}, indent=2))
             return 0
         with lock(workspace / "DeadlockData"):
@@ -314,8 +333,15 @@ def main(argv=None):
                 logs = private_dir(workspace / "DeadlockData/logs" / args.profile)
                 log = logs / f"{args.command}-{timestamp()}.log"
                 tuning = performance.load(workspace, args.profile)
-                pid = start(profile, args.command, log, tuning)
-                print(f"Request sent to Windows Steam (launcher PID {pid}). Private log: {log}")
+                if args.command == "launch" and not args.without_game_mode:
+                    result = game_session.launch_session(workspace, args.profile, args.game_mode_tool, log)
+                    print(f"Game Mode is on. Background watcher PID {result['watcher_pid']} will restore the prior policy when Deadlock exits; there is no play-time limit.")
+                    print("You can close the manager. Use game-mode --session to check startup, exit and restoration.")
+                    print(f"Watcher log: {log.with_suffix('.watcher.log')}")
+                else:
+                    pid = start(profile, args.command, log, tuning)
+                    print(f"Request sent to Windows Steam (launcher PID {pid}).")
+                print(f"Private log: {log}")
                 print("Check Steam for login, updates or Cloud conflicts. This is not proof of a successful game launch.")
         return 0
     except (ManagerError, OSError, ValueError, tarfile.TarError, subprocess.SubprocessError,
