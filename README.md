@@ -9,8 +9,8 @@ See the [compatibility ledger](docs/COMPATIBILITY.md) for observed results rathe
 than inferred compatibility.
 
 The default free candidate is **Highball's Wine 11 build + its paired DXMT build**.
-Steam login and a Direct3D rendering probe work on our M2 Max; gameplay testing is
-in progress. A Sikarugir Wine 11 + upstream DXMT 0.80 pair remains available for
+Steam login, installation and a Direct3D rendering probe work on our M2 Max.
+**The first Deadlock launch crashed; gameplay is not ready.** A Sikarugir Wine 11 + upstream DXMT 0.80 pair remains available for
 comparison, with a known black Steam login window on this Mac. Official
 CrossOver is an optional comparison provider; the project does not depend on a
 CrossOver trial. Every profile owns a separate Steam environment so runtime
@@ -65,11 +65,14 @@ The manager has no third-party Python dependencies.
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 python3 bin/deadlock-mac profiles
+python3 bin/deadlock-mac runtimes
 python3 bin/deadlock-mac launch --dry-run
 python3 bin/deadlock-mac runtime-verify
+python3 bin/deadlock-mac runtime-dependencies
 ```
 
 - [Runtime research, alternatives and upgrades](docs/RUNTIMES.md)
+- [Module boundaries, packaging plan and release gates](docs/ARCHITECTURE.md)
 - [Tests, gameplay acceptance and performance comparisons](docs/TESTING.md)
 - [Observed compatibility](docs/COMPATIBILITY.md)
 - [Security and provenance limitations](SECURITY.md)

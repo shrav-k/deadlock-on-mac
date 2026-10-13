@@ -13,23 +13,13 @@ import urllib.error
 
 from . import __version__
 from .backup import snapshot
+from .catalog import REPO, artifacts, catalog, components, runtime_set
+from .diagnostics import engine_dependencies
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
 from .steam import game_status
 from .storage import (ManagerError, atomic_json, download, identifier, lock, private_dir,
                       sha256, unpack, verify_extracted)
-
-REPO = Path(__file__).resolve().parents[2]
-WINE = "sikarugir-wine-11.0_1"
-DXMT = "dxmt-0.80"
-SUPPORT = "sikarugir-support-1.0.21"
-RUNTIMES = {"sikarugir": (WINE, DXMT),
-            "highball": ("highball-wine-20261006", "dxmt-highball-a444716")}
-
-
-def artifacts():
-    return json.loads((REPO / "config/runtime-lock.json").read_text())["artifacts"]
-
 
 def fetch(workspace, name):
     artifact = artifacts()[name]
@@ -37,7 +27,7 @@ def fetch(workspace, name):
 
 
 def install_runtimes(workspace, family="highball"):
-    for name in (*RUNTIMES[family], SUPPORT):
+    for name in components(family):
         artifact = artifacts()[name]
         destination = workspace / "Runtimes" / name
         receipt = destination / "manager-receipt.json"
@@ -55,7 +45,7 @@ def install_runtimes(workspace, family="highball"):
 
 
 def verify_runtimes(workspace, family):
-    for name in (*RUNTIMES[family], SUPPORT):
+    for name in components(family):
         artifact = artifacts()[name]
         archive = fetch(workspace, name)
         count = verify_extracted(archive, workspace / "Runtimes" / name,
@@ -89,11 +79,12 @@ def create_profile(workspace, name, crossover=None, family="highball"):
         profile.update(provider="crossover", runtime=str(Path(crossover).absolute()),
                        graphics="vendor", runtime_version=version)
     else:
-        wine_name, dxmt_name = RUNTIMES[family]
-        profile.update(provider="wine", wine_family=family,
+        wine_name, dxmt_name, support_name = components(family)
+        candidate = runtime_set(family)
+        profile.update(provider="wine", wine_family=candidate["wine_family"], runtime_set=family,
                        runtime=str(workspace / "Runtimes" / wine_name / artifacts()[wine_name]["root"]),
                        dxmt=str(workspace / "Runtimes" / dxmt_name / artifacts()[dxmt_name]["root"]), graphics="dxmt",
-                       support=str(workspace / "Runtimes" / SUPPORT / artifacts()[SUPPORT]["root"]),
+                       support=str(workspace / "Runtimes" / support_name / artifacts()[support_name]["root"]),
                        runtime_version=wine_name, dxmt_version=dxmt_name)
     validate_profile(profile, workspace)
     atomic_json(path, profile)
@@ -106,6 +97,8 @@ def setup(workspace, profile):
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise ManagerError("The free runtime is currently intended for Apple Silicon macOS.")
     minimum = (15, 0) if profile.get("wine_family") == "highball" else (14, 6)
+    if profile.get("runtime_set"):
+        minimum = tuple(runtime_set(profile["runtime_set"])["minimum_macos"])
     version = tuple(int(v) for v in platform.mac_ver()[0].split(".")[:2])
     if version < minimum:
         raise ManagerError(f"This runtime requires macOS {minimum[0]}.{minimum[1]} or newer.")
@@ -160,23 +153,30 @@ def doctor(workspace, profile):
 
 
 def main(argv=None):
+    try:
+        runtime_catalog = catalog()
+    except (ManagerError, OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"Error loading runtime catalog: {exc}", file=sys.stderr)
+        return 1
     parser = argparse.ArgumentParser(description="Run Deadlock through your Steam account on macOS.")
     parser.add_argument("--workspace", type=Path, default=REPO.parent,
                         help="Deadlock workspace folder; runtimes, bottles and private state live here")
-    parser.add_argument("--profile", default="highball")
+    parser.add_argument("--profile", default=runtime_catalog["default"])
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("runtime-install", help="Download and verify a pinned free Wine + DXMT pair")
-    p.add_argument("--runtime", choices=RUNTIMES, default="highball")
+    p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     p = sub.add_parser("runtime-verify", help="Check installed runtime files against pinned archives")
-    p.add_argument("--runtime", choices=RUNTIMES, default="highball")
+    p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     p = sub.add_parser("profile-create", help="Create an immutable runtime profile")
     p.add_argument("--crossover", type=Path, help="Optional official CrossOver.app for comparison")
-    p.add_argument("--runtime", choices=RUNTIMES, default="highball")
+    p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
+    sub.add_parser("runtimes", help="List available runtime combinations and known compatibility limits")
     sub.add_parser("setup", help="Initialize the free profile and install Windows Steam")
     for action in ("steam", "install", "launch"):
         p = sub.add_parser(action)
         p.add_argument("--dry-run", action="store_true", help="Print argv without executing anything")
     sub.add_parser("doctor", help="Print a shareable allowlisted report; never reads Steam credentials")
+    sub.add_parser("runtime-dependencies", help="Inspect direct Wine module imports for missing host libraries")
     sub.add_parser("backup", help="Snapshot Deadlock data while all Steam/Wine processes are closed")
     sub.add_parser("profiles", help="List configured runtime profiles")
     args = parser.parse_args(argv)
@@ -187,14 +187,22 @@ def main(argv=None):
             raise ManagerError("Python 3.12 or newer is required for safe archive extraction.")
         if not workspace.is_dir():
             raise ManagerError("Workspace must be an existing directory.")
+        if args.command == "runtimes":
+            for name, entry in runtime_catalog["runtimes"].items():
+                print(f"{name}: {entry['label']} — {entry['status']}")
+            return 0
         if args.command == "profiles":
             folder = workspace / "DeadlockData/profiles"
             for path in sorted(folder.glob("*.json")):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "steam", "install", "launch", "setup", "backup"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "setup", "backup"):
             profile = load_profile(workspace, args.profile)
+        if args.command == "runtime-dependencies":
+            result = engine_dependencies(profile)
+            print(json.dumps(result, indent=2))
+            return 1 if result["unresolved"] else 0
         if args.command == "doctor":
             print(json.dumps(doctor(workspace, profile), indent=2))
             return 0

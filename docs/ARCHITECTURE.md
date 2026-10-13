@@ -1,0 +1,80 @@
+# Architecture and distribution
+
+The player-facing target is one signed macOS app: choose a tested runtime, install
+Windows Steam, sign in, install Deadlock, and play. The current deliverable is an
+experimental developer CLI. Successful download, installation or checksum tests
+must not be described as proof that the game works out of the box.
+
+## Module boundaries
+
+| Module | Responsibility |
+| --- | --- |
+| `config/runtimes.json` | Named runtime combinations, adapter family, OS minimum and compatibility status |
+| `config/runtime-lock.json` | Versioned artifacts, exact digests, extraction layout, source/license provenance |
+| `catalog.py` | Validate the catalog and resolve a combination to its component artifacts |
+| `runtime.py` | Wine-family and official CrossOver launch adapters; isolated environment and Steam-only game launch |
+| `steam.py` | Narrow app manifest parsing and Deadlock data locations; no account authentication implementation |
+| `storage.py` | HTTPS downloads, archive validation, immutable installations, integrity checks and atomic state |
+| `backup.py` | Offline, game-only snapshots with a file hash manifest |
+| `diagnostics.py` | Read-only native dependency inspection, with explicit scope and unresolved libraries |
+| `cli.py` | Command orchestration, profile creation and selected diagnostics |
+| `tests/native` | Standalone Windows rendering probes, independent of Steam accounts |
+
+Adding another build of an existing Wine family means adding artifact records and
+a runtime-set entry. A new family requires an adapter change and contract tests.
+Components are deliberately paired: a newer DXMT must not silently replace the
+renderer validated with an engine. Official CrossOver remains a separate provider
+because it owns bottle setup, updates and licensing.
+
+Profiles are immutable records with dedicated prefixes. An upgrade creates a new
+runtime directory and profile. Steam manages its own updates and game builds;
+the runtime catalog does not freeze them. A diagnostic launch is not a migration.
+Separate prefixes prevent configuration conflicts, not access to the host.
+
+## Workspace and source
+
+The checkout, runtime installations, bottles, installers, developer tools, private
+logs, crash dumps, backups and audit evidence live beneath one `Deadlock` folder.
+Only the checkout is versioned. Nothing in a runtime installation, Steam account
+directory, crash dump or backup is included in a source release.
+
+Absolute profile paths currently bind a workspace to its location. Consolidation
+is an offline operation: close the managed apps, move directories, rewrite only
+the managed profile paths, then verify runtime hashes, installation metadata and
+launch arguments. Historical logs retain the paths at the time of capture. A
+future app should store workspace-relative managed paths and provide a tested
+relocation command; arbitrary live folder moves are not supported yet.
+
+## Distribution milestones
+
+1. **Developer preview (current):** source checkout, Python 3.12+, pinned free
+   components, explicit setup commands and diagnostic evidence. No claim of
+   out-of-box gameplay. The current M2 Max game-startup crash blocks that claim.
+2. **Packaged preview:** build a self-contained macOS app/CLI with its own Python
+   runtime so players need no Homebrew, Git, pip or compiler. Publish reproducible
+   packaging inputs, checksums, component licenses and a software bill of materials.
+   Keep runtime/game downloads separate from the app package.
+3. **Player release:** sign and notarize the app using a project-controlled Apple
+   Developer identity, offer update/rollback paths, and pass fresh-install and
+   upgrade tests on the advertised macOS/chip matrix. An unsigned development build
+   must not instruct players to disable Gatekeeper.
+
+Do not bundle the commercial CrossOver engine, Steam, Deadlock, credentials or
+Apple's separately licensed D3DMetal. Redistribution of LGPL components needs the
+corresponding source and license obligations satisfied. Packaging must not silently
+change a user's runtime, prefix, Steam account or Cloud-conflict decision.
+
+## Release gates
+
+- Fresh download and extraction; every required artifact is pinned and available.
+- Direct and transitive runtime dependency audit, including optional codec paths.
+- Current Windows Steam installs, self-updates, signs in, closes and reopens.
+- Deadlock installs and launches through that Steam account after a cold restart.
+- Menu and private training render; keyboard, mouse, audio and expected account
+  data work. Then user-verified friends/party/match testing, with Cloud behavior
+  recorded precisely rather than assumed.
+- Updates preserve data; offline backups verify; recovery is tested in a disposable
+  copy. Interrupted downloads and failed upgrades leave the working profile intact.
+
+Automated tests, runtime probes and human gameplay results stay separate in the
+compatibility ledger. Do not promote a version based only on a successful install.

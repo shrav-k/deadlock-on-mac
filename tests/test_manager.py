@@ -10,7 +10,9 @@ from unittest.mock import patch
 import zipfile
 
 from deadlock_mac.backup import snapshot, wine_processes_running
+from deadlock_mac.catalog import artifacts, catalog
 from deadlock_mac.cli import create_profile, doctor, load_profile
+from deadlock_mac.diagnostics import engine_dependencies
 from deadlock_mac.runtime import clean_env, environment, launch_command, start, validate_profile
 from deadlock_mac.steam import parse_vdf, game_status
 from deadlock_mac.storage import ManagerError, atomic_json, download, identifier, lock, unpack, verify_extracted
@@ -93,6 +95,32 @@ class WorkspaceTest(unittest.TestCase):
         self.assertNotIn("SikarugirAppWine11", env)
         self.assertEqual(env["WINEDLLPATH_PREPEND"], self.profile["dxmt"])
         self.assertEqual(env["DXMT_ALLOW_CROSS_PROCESS_SWAPCHAIN"], "1")
+
+    def test_catalog_can_add_a_runtime_combination_without_cli_changes(self):
+        config = self.root / "config"
+        config.mkdir()
+        value = catalog()
+        value["runtimes"]["future-highball"] = dict(value["runtimes"]["highball"])
+        (config / "runtime-lock.json").write_text(json.dumps({"artifacts": artifacts()}))
+        (config / "runtimes.json").write_text(json.dumps(value))
+        with patch("deadlock_mac.catalog.REPO", self.root):
+            create_profile(self.root, "future", family="future-highball")
+        profile = load_profile(self.root, "future")
+        self.assertEqual(profile["runtime_set"], "future-highball")
+        self.assertEqual(profile["wine_family"], "highball")
+
+    def test_catalog_rejects_unknown_component_and_adapter(self):
+        config = self.root / "config"
+        config.mkdir()
+        value = catalog()
+        (config / "runtime-lock.json").write_text(json.dumps({"artifacts": artifacts()}))
+        for key, bad in (("wine", "missing-artifact"), ("wine_family", "unknown-adapter")):
+            original = value["runtimes"]["highball"][key]
+            value["runtimes"]["highball"][key] = bad
+            (config / "runtimes.json").write_text(json.dumps(value))
+            with patch("deadlock_mac.catalog.REPO", self.root), self.assertRaises(ManagerError):
+                catalog()
+            value["runtimes"]["highball"][key] = original
 
     def test_atomic_write_failure_preserves_previous_state(self):
         path = self.root / "state.json"
@@ -242,6 +270,19 @@ class WorkspaceTest(unittest.TestCase):
         self.assertNotIn("userdata", report)
         self.assertIn('"steam_installed": true', report)
         self.assertIn('"cloud": "unverified"', report)
+
+    def test_dependency_check_reports_missing_library_without_host_paths(self):
+        module = Path(self.profile["runtime"]) / "lib/wine/x86_64-unix/winedmo.so"
+        module.parent.mkdir(parents=True)
+        module.touch()
+        listing = (str(module) + ':\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n'
+                   '\t/usr/local/opt/ffmpeg/lib/libavcodec.63.dylib (compatibility version 63.0.0)\n')
+        with patch("deadlock_mac.diagnostics.platform.system", return_value="Darwin"), \
+             patch("deadlock_mac.diagnostics.subprocess.run",
+                   return_value=subprocess.CompletedProcess([], 0, listing, "")):
+            report = engine_dependencies(self.profile)
+        self.assertEqual(report["unresolved"], [{"module": "winedmo.so", "library": "libavcodec.63.dylib"}])
+        self.assertNotIn(str(self.root), json.dumps(report))
 
     def test_download_manifest_is_not_a_completed_install(self):
         manifest = self.steam.parent / "steamapps/appmanifest_1422450.acf"
