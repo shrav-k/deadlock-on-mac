@@ -139,14 +139,28 @@ class ExitTests(unittest.TestCase):
     def test_steam_helper_without_client_is_not_reported_as_closed(self):
         def inspect(prefix, name):
             return {31: 'helper'} if name == 'steamwebhelper.exe' else {}
-        with patch.object(game_exit, 'close', return_value='closed'), patch.object(game_exit, 'send') as send, patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', side_effect=inspect), self.assertRaisesRegex(ManagerError, 'Steam is still running'):
+        with patch.object(game_exit, 'close', return_value='closed'), patch.object(game_exit, 'send') as send, patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', side_effect=inspect), self.assertRaisesRegex(ManagerError, 'Steam did not close'):
             game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', timeout=0, report=Mock())
         send.assert_not_called()
 
     def test_steam_shutdown_timeout_never_force_kills(self):
-        with patch.object(game_exit, 'close', return_value='closed'), patch.object(game_exit, 'send', return_value=Mock(returncode=0)), patch.object(game_exit, 'steam_control_command', return_value=['steam', '-shutdown']), patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', return_value={30: 'steam'}), patch.object(game_exit.os, 'kill') as kill, self.assertRaisesRegex(ManagerError, 'Steam is still running'):
+        with patch.object(game_exit, 'close', return_value='closed'), patch.object(game_exit, 'send', return_value=Mock(returncode=0)), patch.object(game_exit, 'steam_control_command', return_value=['steam', '-shutdown']), patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', return_value={30: 'steam'}), patch.object(game_exit.os, 'kill') as kill, self.assertRaisesRegex(ManagerError, 'Steam did not close'):
             game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', timeout=0, report=Mock())
         kill.assert_not_called()
+
+    def test_slow_shutdown_reports_progress_without_claiming_delivery_success(self):
+        clock = [0.0]
+        def sleep(seconds):
+            clock[0] += seconds
+        def inspect(prefix, name):
+            return {30: 'steam'} if name == 'steam.exe' and clock[0] < 7 else {}
+        report = Mock()
+        with patch.object(game_exit, 'close', return_value='game closed'), patch.object(game_exit, 'send', return_value=Mock(returncode=0)), patch.object(game_exit, 'steam_control_command', return_value=['steam', '-shutdown']), patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', side_effect=inspect), patch.object(game_exit, 'finish_session', return_value='restored'), patch.object(game_exit.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(game_exit.time, 'sleep', side_effect=sleep):
+            self.assertIn('helpers exited', game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', timeout=10, report=report))
+        messages = [call.args[0] for call in report.call_args_list]
+        self.assertTrue(any('Shutdown requested' in message and '10s' in message for message in messages))
+        self.assertEqual(sum('Still waiting' in message for message in messages), 1)
+        self.assertTrue(any('5s left' in message for message in messages))
 
     def test_cli_routes_steam_exit_under_workspace_lock(self):
         from deadlock_mac.cli import main

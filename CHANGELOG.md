@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 — development
+
+- Keep operation feedback beside Exit controls, display elapsed time and periodic
+  shutdown countdowns, and explain recovery when Steam does not process a request.
+- Test explicit manager quit after a failed operation. The live Steam shutdown
+  failure after a client update is still under investigation; no fix is claimed.
+
 ## 0.2.1 — development
 
 - Own the manager window and application lifecycle in AppKit while retaining the

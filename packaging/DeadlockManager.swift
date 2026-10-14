@@ -14,6 +14,7 @@ final class ManagerModel: ObservableObject {
     var running: Bool { lifecycle.running }
     @Published var status = "Ready to set up Windows Steam."
     @Published var output = ""
+    @Published private(set) var operationStartedAt: Date?
     @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
     var testingGameMode: Bool { lifecycle.testingGameMode }
     @Published var automaticGameMode = UserDefaults.standard.object(forKey: "automaticGameMode") as? Bool ?? true {
@@ -56,6 +57,7 @@ final class ManagerModel: ObservableObject {
 
     private func finished(success: Bool) {
         activeProcess = nil
+        operationStartedAt = nil
         let result = lifecycle.finish(success: success)
         // A busy quit was cancelled, not deferred into AppKit's modal termination
         // loop. Resubmit only after the worker has finished successfully so its
@@ -83,6 +85,7 @@ final class ManagerModel: ObservableObject {
         guard !running, let resources = Bundle.main.resourceURL, lifecycle.begin(command) else { return }
         status = label
         output = ""
+        operationStartedAt = Date()
         let selectedWorkspace = workspace
         let selectedProfile = profile
         Task.detached {
@@ -186,6 +189,25 @@ struct ContentView: View {
                 Spacer()
                 Button("Quit Manager") { NSApp.terminate(nil) }
             }
+            // Keep operation feedback beside the controls, above the settings
+            // that otherwise push errors and pending-quit status below the fold.
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    if model.running { ProgressView().controlSize(.small) }
+                    Text(model.status).font(.callout).textSelection(.enabled)
+                    Spacer()
+                    if let started = model.operationStartedAt {
+                        TimelineView(.periodic(from: started, by: 1)) { context in
+                            Text("\(max(0, Int(context.date.timeIntervalSince(started))))s elapsed")
+                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let latest = model.output.split(separator: "\n").last {
+                    Text(String(latest)).font(.caption).textSelection(.enabled)
+                        .lineLimit(3).foregroundStyle(.secondary)
+                }
+            }
             Text("Exit Windows Steam closes Deadlock first. Quit Manager leaves Steam and the game running; Game Mode still restores when the game exits.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text("Complete Steam Guard in Steam. Cloud support depends on the game; resolve any sync conflicts yourself.")
@@ -263,11 +285,6 @@ struct ContentView: View {
                         }
                     }.font(.caption)
                 }.padding(5)
-            }
-            HStack {
-                if model.running { ProgressView().controlSize(.small) }
-                Text(model.status).font(.callout).textSelection(.enabled)
-                Spacer()
             }
             DisclosureGroup("Details", isExpanded: $showDetails) {
                 ScrollView {

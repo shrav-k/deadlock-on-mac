@@ -1,6 +1,6 @@
 # Compatibility ledger
 
-Keep observed results distinct from upstream claims. Last updated 2026-10-13.
+Keep observed results distinct from upstream claims. Last updated 2026-10-14.
 
 | Configuration | Installation | Steam account | Deadlock rendering | Multiplayer / Cloud |
 | --- | --- | --- | --- | --- |
@@ -307,3 +307,26 @@ Private UI evidence is under `DeadlockData/ui-acceptance/2026-10-14/`. External
 hardware detected in this session is an LG UltraGear at 2560×1440/144 Hz on HDMI,
 with the built-in display still primary. The user's intended use is many displays
 while hotdesking; this hardware detection is not an external gameplay pass.
+
+The 0.2.1 live retry did **not** pass Steam shutdown. The user reported that Steam
+remained open and the manager appeared stuck. The worker ran for approximately
+60 seconds, then exited while the manager remained alive. A native process sample
+showed the manager servicing its main event loop. This differs from 0.2.0's
+premature termination, but does not meet the requested end-to-end behavior.
+
+Steam applied a pending update during the intervening restart: its updater changed
+from a September 2 build to October 13, with client build 1791918634. Subsequent
+`-ifrunning -shutdown` requests, and a diagnostic request without `-ifrunning`,
+returned zero without a corresponding `ExecCommandLine` in the client log. A Wine
+relay trace showed the command being written to `TempAppCmdLine` and a successful
+`SetEvent` on `Global\\Valve_SteamIPC_Class`; this establishes submission, not
+client processing. The update is a correlation, not a proven root cause. No
+Steam downgrade, force kill or gameplay test was performed. A Steam-menu exit and
+fresh-client comparison remain pending.
+
+Operation status and the latest progress/error line now appear beside the Exit
+buttons, with elapsed time and periodic shutdown countdown messages. The timeout
+explains how to use Steam's own Exit and that the manager can be quit afterward.
+113 Python tests and nine native app integration tests pass locally, including
+an explicit quit after an operation fails. These do not resolve or qualify the
+remaining live Steam IPC failure.

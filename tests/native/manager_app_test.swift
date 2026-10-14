@@ -14,6 +14,7 @@ struct ManagerAppTests {
         app.delegate = delegate
         let marker = URL(fileURLWithPath: workspace).appendingPathComponent("worker-finished")
         var requested = false
+        var retryQuitAfterFailure = false
         let shouldFail = scenario.contains("failure")
         let idle = scenario == "idle-close"
         let diagnostic = scenario.contains("diagnostic")
@@ -21,8 +22,9 @@ struct ManagerAppTests {
                                                                object: app, queue: .main) { _ in
             MainActor.assumeIsolated {
                 precondition(requested, "Unexpected app termination")
-                precondition(!shouldFail, "Failed operation must leave the manager open")
+                precondition(!shouldFail || retryQuitAfterFailure, "Failed operation must leave the manager open")
                 precondition(!delegate.model.running, "Quit orphaned an active worker")
+                precondition(delegate.model.operationStartedAt == nil)
                 if !idle {
                     let text = try! String(contentsOf: marker, encoding: .utf8)
                     precondition(text == (diagnostic ? "restored" : "success"))
@@ -48,6 +50,7 @@ struct ManagerAppTests {
                 }
                 if !idle {
                     precondition(delegate.model.running, "Worker unexpectedly finished before the test request")
+                    precondition(delegate.model.operationStartedAt != nil)
                     precondition(delegate.model.status.contains(diagnostic ? "Restoring" : "Finishing"))
                 }
             }
@@ -62,9 +65,15 @@ struct ManagerAppTests {
                 && !FileManager.default.fileExists(atPath: marker.path)
             if shouldFail || cancelledBeforeStart {
                 precondition(requested && !delegate.model.running)
+                precondition(delegate.model.operationStartedAt == nil)
                 precondition(delegate.model.status.contains("could not finish"))
                 precondition(delegate.window?.delegate === delegate)
                 if shouldFail { precondition(FileManager.default.fileExists(atPath: marker.path)) }
+                if scenario == "failure-close-retry-quit" {
+                    retryQuitAfterFailure = true
+                    app.terminate(nil)
+                    return
+                }
                 print("PASS \(scenario): failure remains available")
                 exit(0)
             }

@@ -78,12 +78,16 @@ def close_steam(workspace, profile, log, timeout=60, report=print):
         result = send(profile, steam_control_command(profile, "steam"), log)
         if result.returncode and any(game_mode.process_identity(pid) == identity for pid, identity in clients.items()):
             raise ManagerError(f"Could not request Windows Steam shutdown. See {log}.")
-        report("Windows Steam is shutting down. Waiting for the client and its helpers…")
+        report(f"Shutdown requested; waiting up to {timeout:g}s for Windows Steam and its helpers. Check Steam for prompts.")
     deadline = time.monotonic() + timeout
+    next_report = time.monotonic() + 5
     while any(game_session.processes_in_prefix(profile["prefix"], name)
               for name in ("steam.exe", "steamwebhelper.exe", "steamservice.exe", "gameoverlayui.exe")):
         if time.monotonic() >= deadline:
-            raise ManagerError("Windows Steam is still running. Check Steam for sync, download or confirmation prompts; it was not force-killed.")
+            raise ManagerError("Windows Steam did not close within the timeout. Check Steam for prompts or use Steam → Exit. You can quit the manager and retry after restarting Steam; no process was force-killed.")
+        if time.monotonic() >= next_report:
+            report(f"Still waiting for Windows Steam ({max(0, deadline - time.monotonic()):.0f}s left). Check Steam for prompts; Quit Manager will wait for this step.")
+            next_report = time.monotonic() + 5
         time.sleep(0.5)
     message = "Windows Steam and its helpers exited. " if clients else "Windows Steam and its helpers are closed. "
     return message + finish_session(workspace, profile["id"])

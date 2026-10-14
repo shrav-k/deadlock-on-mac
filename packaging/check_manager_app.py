@@ -45,7 +45,8 @@ def main():
                         str(REPO / 'packaging/DeadlockManager.swift'),
                         str(REPO / 'tests/native/manager_app_test.swift'), '-o', str(binary)], check=True)
         for scenario in ('idle-close', 'success-close', 'success-quit', 'failure-close',
-                         'failure-quit', 'diagnostic-close', 'diagnostic-quit', 'diagnostic-before-spawn'):
+                         'failure-quit', 'failure-close-retry-quit', 'diagnostic-close',
+                         'diagnostic-quit', 'diagnostic-before-spawn'):
             workspace = root / scenario
             workspace.mkdir()
             env = dict(os.environ, NSUnbufferedIO='YES')
