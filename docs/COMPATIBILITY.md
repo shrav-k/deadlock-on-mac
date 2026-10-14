@@ -268,6 +268,16 @@ timeouts rather than treating command delivery as success. A separate regression
 test covers helpers lingering after the main Steam client has already exited.
 
 The Python suite has 112 passing tests, including shutdown/error/isolation and
-packaging failure cases. Native Swift quit-policy tests pass. Visual testing of
-the new buttons is pending because the Mac was locked when the UI tool connected.
-Gameplay, fullscreen correction and external-display acceptance remain paused.
+packaging failure cases. Native Swift quit-policy tests pass. One additional
+lifecycle cycle passed after installing the final bundle, with exit/restoration
+in 6.3 seconds; its report is in
+`DeadlockData/lifecycle-checks/20261013T222309993556Z/`.
+
+After unlocking the Mac, the user confirmed clicking **Quit Manager** closed its
+window. A subsequent process check confirmed the manager executable was no longer
+running; the Game Mode receipt remained finished, at `auto`, with no restoration
+pending. This is a verified idle Quit button check. The UI tool continued to lose
+its native connection, so direct button checks for Exit Deadlock/Windows Steam,
+Command–Q, window-close and quit during an active operation remain distinct from
+the passing shared-CLI and Swift policy tests. Gameplay and external-display
+acceptance remain paused; the fullscreen defect remains unresolved.
