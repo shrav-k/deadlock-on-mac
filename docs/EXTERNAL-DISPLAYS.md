@@ -13,8 +13,8 @@ built-in screen remains primary (1512×982 logical desktop, 3024×1964 pixels at
 Exact model, HDR/VRR capability and normal lid state are not established. AC power
 and Low Power Mode off were confirmed. No external gameplay benchmark has run.
 
-Our saved 3024×1964 borderless configuration passed laptop coverage, input and
-focus checks. It must not be applied blindly to a new monitor. At native output,
+The previously tested 3024×1964 borderless configuration passed laptop coverage,
+input and focus checks. It must not be applied blindly to a new monitor. At native output,
 1440p has 3.69 million pixels: about 38% fewer than that laptop Retina output, but
 78% more than 1920×1080. These are pixel counts, not predicted FPS. Internal render
 scale, particles, CPU work and the compositor also matter.
@@ -25,6 +25,15 @@ Game Mode On, game/menu caps 60**. Preserve the existing quality/upscaler settin
 for the initial comparison and record them. Do not describe this as native
 internal rendering unless render scale is verified. Validate coverage, pointer
 alignment, Command–Tab, manager Exit and desktop restoration before gameplay.
+
+**Later investigation:** the user wants monitor selection without changing the
+macOS primary display. Win32, DXGI and the game's SDL3 enumerate the secondary LG,
+but Retina mode makes them report it as 5120×2880 while native macOS reports
+2560×1440 at 1×. The current saved game file is 2880×1800 borderless with monitor
+index 1; it was left unchanged. Do not apply the proposed baseline until output
+selection and scaling are qualified. [Wine/CodeWeavers review](WINE-PRACTICES.md)
+contains the isolated comparison, source limitations and manager-picker design.
+Making the external screen primary is an optional workaround, not a requirement.
 
 Hotdesking acceptance must cover:
 

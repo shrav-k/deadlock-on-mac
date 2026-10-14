@@ -103,6 +103,7 @@ python3 bin/deadlock-mac runtime-dependencies
 
 - [Runtime research, alternatives and upgrades](docs/RUNTIMES.md)
 - [External displays, hotdesking and performance research](docs/EXTERNAL-DISPLAYS.md)
+- [Wine/CodeWeavers practices and secondary-display investigation](docs/WINE-PRACTICES.md)
 - [Module boundaries, packaging plan and release gates](docs/ARCHITECTURE.md)
 - [Tests, gameplay acceptance and performance comparisons](docs/TESTING.md)
 - [Observed compatibility](docs/COMPATIBILITY.md)

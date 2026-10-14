@@ -353,5 +353,28 @@ no-op, and Game Mode stayed at `auto`. The report is
 `DeadlockData/lifecycle-checks/20261014T232424909041Z/report.json`. This is a second
 successful shutdown after recovery, not gameplay or update-handoff qualification.
 The suite now has 117 passing Python tests, including Steam-only harness guards
-against launching or closing a user-started game. Actual busy-close and busy
-Command–Q checks remain pending.
+against launching or closing a user-started game. Both GitHub Actions runs for
+commit `8671bfd` passed, including the nine native AppKit integration scenarios.
+
+### Final 0.2.2 busy-quit acceptance
+
+Both remaining actual controls passed after recovery. The user performed the
+actions; a timestamped process trace independently verified shutdown order:
+
+| Action during Exit Windows Steam | User observation | Process result |
+| --- | --- | --- |
+| Red window-close button | Manager waits, then Steam and manager close | Steam and all helpers were absent by 23:28:38.111 UTC; the manager and its still-owned worker remained until completion |
+| Command–Q with manager focused | Manager waits, then both close | Steam and all helpers were absent by 23:29:32.718 UTC, the worker by 23:29:33.013, and the manager by 23:29:33.331 |
+
+Neither check launched Deadlock or used force termination. The worker remained a
+child of the manager while shutdown was in progress. Game Mode remained at the
+previous `auto` policy with no restoration pending. Private receipts are
+`busy-close-0.2.2.json` and `busy-command-q-0.2.2.json` alongside
+`process-transitions-0.2.2.jsonl` in the UI evidence directory above.
+
+Together with the earlier actual Exit Deadlock, Exit Windows Steam, idle Quit
+Manager and idle Command–Q checks, this completes the requested manager-control
+acceptance on this stack. Four normal Steam shutdowns passed after the one scoped
+recovery. The cause of the earlier Steam update/session hang remains unresolved;
+these results do not establish that it cannot recur. External-display coverage,
+focus, gameplay and sustained performance remain separate acceptance work.

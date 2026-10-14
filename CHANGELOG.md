@@ -8,6 +8,13 @@
   failure after a client update is still under investigation; no fix is claimed.
 - Add opt-in Steam-only idle/restart/shutdown qualification, with tests ensuring
   it never launches a game, closes a user-started game or force-kills a client.
+- Verify actual busy red-close and Command–Q behavior after scoped Steam recovery;
+  retain the underlying client hang as unresolved rather than claiming a fix.
+- Add native host and guest display inventory probes, compare the free runtime
+  with an isolated official CrossOver bottle, and document the observed mixed-DPI
+  coordinate mismatch. No secondary-display game acceptance is claimed.
+- Review CodeWeavers installation, graphics, DPI, logging and bottle practices;
+  propose a monitor picker that preserves the user's macOS primary display.
 
 ## 0.2.1 — development
 

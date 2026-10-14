@@ -124,7 +124,8 @@ connect/disconnect recovery when that hardware is available.
 External-display use is the primary target for the next user gameplay session.
 Record connection type, macOS primary display, scaling, refresh, requested/output
 dimensions and internal render scale. Include lid-open/lid-closed use where
-applicable, launching on the external primary display, Command–Tab, quit/relaunch,
+applicable, explicitly launching on an external secondary display without changing
+the macOS primary display, Command–Tab, quit/relaunch,
 and unplug/reconnect recovery. These are pending hardware acceptance checks;
 the built-in-display Retina result does not qualify an external display. The
 manager defaults its display editor to borderless with empty dimensions, so it
@@ -152,6 +153,24 @@ The initial built-in-display probe accepted 1512×982 and 1920×1200 but matched
 1920×1080 to 1920×1200, which was recorded as unsupported rather than passed.
 These were API/geometry results only. The real game's fullscreen cold launch,
 pointer alignment, focus recovery and clean exit remain separate acceptance steps.
+
+### Display inventory is not visible-output verification
+
+`tests/native/display_inventory_probe.c` queries Win32, DXGI and an explicitly
+supplied SDL3 library. Compile with the pinned LLVM-MinGW toolchain using
+`-Wall -Wextra -Werror -O2 -municode`, linking `dxgi`, `dxguid` and `user32`.
+Pass the installed game's absolute Windows path to `SDL3.dll` as its sole argument
+and use the complete selected runtime environment. The probe creates no window
+and changes no display mode. A zero exit status means inventory collection
+succeeded; it does not verify where a game appears or its drawable resolution.
+
+`tests/native/macos_display_inventory.swift` supplies a separate native host
+reference via AppKit/CoreGraphics. Compile with `xcrun swiftc` and run it without
+arguments. It collects names, current logical/backing dimensions, scale, primary
+status and session-only IDs; it collects no serials and performs no UI actions.
+Guest API agreement is not independent physical-pixel evidence: all guest paths
+can share the same Wine driver assumptions. Compare with host metadata, then
+visible own-window and game acceptance. See [WINE-PRACTICES.md](WINE-PRACTICES.md).
 
 ## Distribution gate
 
