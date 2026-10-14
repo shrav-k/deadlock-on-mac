@@ -15,7 +15,7 @@ real test case; keep authentication, Wine and renderer adapters separate.
 | Build/provenance | Pinned source/toolchain/patches, ABI, hashes, licenses | Reviewed sechost overlay recipe; full engine reproduction still open |
 | Windows APIs | Valid/invalid device handles in 32/64-bit, correct errors, no unhandled fault | Native notification probes |
 | Rendering | Hardware adapter, D3D11 device/swapchain, repeated present | Native 120-frame probe; not a shader correctness suite |
-| Steam | Fresh install, update, login/Guard, library, download, cold/warm restart | Manual acceptance using Valve UI |
+| Steam | Fresh install, update, login/Guard, library, download, cold/warm restart | Valve UI acceptance plus opt-in `check_lifecycle.py --steam-only` idle/shutdown checks |
 | Lifecycle | Ten normal quit/relaunch cycles, five manager Exit cycles, no debugger, exact Game Mode restoration | Automated watcher/exit logic and opt-in menu-only `check_lifecycle.py`; live results recorded separately |
 | Input/display/audio | Mouse capture, keyboard/controller, focus, minimize, window modes, display scaling, audio/voice | Manual matrix; fullscreen regression currently open |
 | Persistence | Supported Cloud sync verified in Steam, local backup and restore drill | Backup unit tests; full live restore drill open |

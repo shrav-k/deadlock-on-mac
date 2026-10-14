@@ -21,7 +21,8 @@ from deadlock_mac.runtime import clean_env
 from deadlock_mac.storage import ManagerError, atomic_json, private_dir
 
 
-def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=None):
+def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=None,
+          steam_only=False, idle_seconds=180):
     workspace = workspace.resolve()
     profile = load_profile(workspace, profile_id)
     if game_session.games_in_prefix(profile['prefix']):
@@ -30,11 +31,13 @@ def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=N
         raise ManagerError('Finish or recover the existing Game Mode session before testing.')
     if not 1 <= cycles <= 10 or not 5 <= settle_seconds <= 60:
         raise ManagerError('Use 1–10 cycles and 5–60 seconds of menu settling time.')
+    if not 0 <= idle_seconds <= 600:
+        raise ManagerError('Use 0–600 seconds of Steam idle time.')
     tool = AppleTool(tool_path)
     tool_path = tool.path
     original = tool.status()['policy']
     folder = private_dir(workspace / 'DeadlockData/lifecycle-checks' / timestamp())
-    result = {'schema': 1, 'scope': 'menu-only lifecycle; no gameplay or display acceptance',
+    result = {'schema': 1, 'scope': 'Steam-only lifecycle; no game launch' if steam_only else 'menu-only lifecycle; no gameplay or display acceptance',
               'original_policy': original, 'cycles': [], 'passed': False}
     if manager:
         resources = manager.resolve() / 'Contents/Resources'
@@ -57,7 +60,38 @@ def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=N
         for index in range(cycles):
             cycle = {'number': index + 1, 'started_utc': datetime.now(timezone.utc).isoformat()}
             result['cycles'].append(cycle)
-            print(f'Menu-only lifecycle cycle {index + 1}/{cycles}', flush=True)
+            print(f'{"Steam-only" if steam_only else "Menu-only"} lifecycle cycle {index + 1}/{cycles}', flush=True)
+            if steam_only:
+                command('steam')
+                deadline = time.monotonic() + 180
+                while not (game_session.processes_in_prefix(profile['prefix'], 'steam.exe')
+                           and game_session.processes_in_prefix(profile['prefix'], 'steamwebhelper.exe')):
+                    if time.monotonic() >= deadline:
+                        raise ManagerError('Steam client and browser helper did not appear; inspect Steam before retrying.')
+                    time.sleep(1)
+                print(f'Client and browser processes present; idling {idle_seconds}s before shutdown (not UI acceptance).', flush=True)
+                idle_until = time.monotonic() + idle_seconds
+                while time.monotonic() < idle_until:
+                    if game_session.games_in_prefix(profile['prefix']):
+                        raise ManagerError('Deadlock started during the Steam-only test. Stopping the check without closing the game.')
+                    time.sleep(max(0, min(1, idle_until - time.monotonic())))
+                if game_session.games_in_prefix(profile['prefix']):
+                    raise ManagerError('Deadlock started during the Steam-only test. Stopping the check without closing the game.')
+                clients = game_session.processes_in_prefix(profile['prefix'], 'steam.exe')
+                if len(clients) != 1:
+                    raise ManagerError('Expected one Steam client before shutdown.')
+                cycle['steam_pid'] = next(iter(clients))
+                cycle['idle_seconds'] = idle_seconds
+                print('Requesting normal Steam shutdown…', flush=True)
+                started = time.monotonic()
+                cycle['steam_exit_result'] = command('steam-exit')
+                cycle['steam_exit_seconds'] = round(time.monotonic() - started, 2)
+                if tool.status()['policy'] != original:
+                    raise ManagerError('Game Mode policy changed during a Steam-only check.')
+                command('steam-exit')
+                cycle['passed'] = True
+                atomic_json(folder / 'report.json', result)
+                continue
             command('launch', '--game-mode-tool', str(tool_path))
             deadline = time.monotonic() + 180
             while not game_session.games_in_prefix(profile['prefix']):
@@ -88,10 +122,11 @@ def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=N
     except (ManagerError, OSError, subprocess.SubprocessError) as exc:
         result['error'] = str(exc)
         # Attempt normal closure only. Preserve the original failure and recovery state.
-        try:
-            result['cleanup'] = command('exit')
-        except (ManagerError, OSError, subprocess.SubprocessError) as cleanup:
-            result['cleanup_error'] = str(cleanup)
+        if not steam_only:
+            try:
+                result['cleanup'] = command('exit')
+            except (ManagerError, OSError, subprocess.SubprocessError) as cleanup:
+                result['cleanup_error'] = str(cleanup)
         raise
     finally:
         result['finished_utc'] = datetime.now(timezone.utc).isoformat()
@@ -108,8 +143,11 @@ if __name__ == '__main__':
     parser.add_argument('--manager-app', type=Path, help='Test this built app’s bundled CLI instead of source')
     parser.add_argument('--cycles', type=int, default=1)
     parser.add_argument('--settle-seconds', type=int, default=15)
+    parser.add_argument('--steam-only', action='store_true', help='Open and close Steam without launching Deadlock')
+    parser.add_argument('--idle-seconds', type=int, default=180, help='Steam-only idle interval before shutdown (0–600)')
     args = parser.parse_args()
     try:
-        check(args.workspace, args.profile, args.game_mode_tool, args.cycles, args.settle_seconds, args.manager_app)
+        check(args.workspace, args.profile, args.game_mode_tool, args.cycles, args.settle_seconds,
+              args.manager_app, args.steam_only, args.idle_seconds)
     except (ManagerError, OSError, subprocess.SubprocessError) as exc:
         parser.exit(1, f'Lifecycle check failed: {exc}\n')

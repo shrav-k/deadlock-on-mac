@@ -330,3 +330,28 @@ explains how to use Steam's own Exit and that the manager can be quit afterward.
 113 Python tests and nine native app integration tests pass locally, including
 an explicit quit after an operation fails. These do not resolve or qualify the
 remaining live Steam IPC failure.
+
+The user then reported Steam's own **Steam → Exit** stuck on “Exiting.” Before
+recovery, Deadlock was absent, Game Mode was restored to `auto`, and Steam's last
+Cloud log reported synchronization complete. After preserving private logs and
+process samples, the affected bottle was force-stopped explicitly for recovery.
+This was not a normal-exit pass and is not an automatic manager fallback. Native
+Mac Steam and game files were untouched.
+
+A cold start of the same client build 1791918634 subsequently processed the normal
+`-ifrunning -shutdown` request and exited with all helpers. No version rollback or
+client patch was applied. This demonstrates recovery from the stuck session,
+not a proven fix for the cause. The 0.2.2 manager bundle was installed with its
+signature verified; the idle old manager was terminated for replacement, which
+is not counted as a Quit-button test. Longer idle/client shutdown checks and
+actual busy-close/Command–Q acceptance remain separate gates.
+
+The subsequent Steam-only check waited 180 seconds, including a successfully
+completed background update check, before requesting shutdown. The client and
+helpers exited normally in **2.56 seconds**; a repeated shutdown was a successful
+no-op, and Game Mode stayed at `auto`. The report is
+`DeadlockData/lifecycle-checks/20261014T232424909041Z/report.json`. This is a second
+successful shutdown after recovery, not gameplay or update-handoff qualification.
+The suite now has 117 passing Python tests, including Steam-only harness guards
+against launching or closing a user-started game. Actual busy-close and busy
+Command–Q checks remain pending.

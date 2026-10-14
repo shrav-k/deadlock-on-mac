@@ -6,6 +6,8 @@
   shutdown countdowns, and explain recovery when Steam does not process a request.
 - Test explicit manager quit after a failed operation. The live Steam shutdown
   failure after a client update is still under investigation; no fix is claimed.
+- Add opt-in Steam-only idle/restart/shutdown qualification, with tests ensuring
+  it never launches a game, closes a user-started game or force-kills a client.
 
 ## 0.2.1 — development
 

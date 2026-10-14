@@ -113,3 +113,25 @@ changes display/performance settings. Private reports/logs live under
 `DeadlockData/lifecycle-checks/`. A failure stops the run and attempts only normal
 game closure; no force-kill or automatic prompt confirmation is used. A process
 surviving startup is not proof of correct visuals or gameplay compatibility.
+
+## Steam-only restart and shutdown checks
+
+After a Steam client update, isolate client lifecycle from game behavior:
+
+```sh
+python3 packaging/check_lifecycle.py --workspace .. \
+  --game-mode-tool /absolute/path/to/gamepolicyctl \
+  --manager-app '../Builds/Deadlock Manager.app' \
+  --steam-only --idle-seconds 180 --cycles 3
+```
+
+This opens Steam, waits for client/browser processes, allows the chosen idle
+interval, requests normal shutdown, checks the unchanged Game Mode policy and
+tests a repeated no-op shutdown. It never launches Deadlock. An existing Steam
+client can be used for the first cycle; later cycles start after verified client
+shutdown. Process presence is not a login or UI acceptance check. If the user
+starts Deadlock, the harness stops without closing it. A failed shutdown stops
+the test and preserves evidence; it never escalates to force termination.
+
+Actual buttons, Command–Q and red-close still need UI acceptance. A cold restart
+recovering a hung client does not establish that its underlying hang is fixed.
