@@ -281,3 +281,29 @@ its native connection, so direct button checks for Exit Deadlock/Windows Steam,
 Command–Q, window-close and quit during an active operation remain distinct from
 the passing shared-CLI and Swift policy tests. Gameplay and external-display
 acceptance remain paused; the fullscreen defect remains unresolved.
+
+## Actual manager controls — 2026-10-14
+
+The user clicked the installed 0.2.0 app's **Exit Deadlock** button. The game process
+disappeared, Steam stayed open, and the session receipt confirmed restoration from
+the prior `auto` policy to `auto`/off with no pending recovery. **Exit Windows Steam**
+also passed through its actual button: the client and browser/service/overlay
+helpers disappeared while the manager remained open. An idle **Command–Q** check
+closed the manager window and its process. These are distinct from the earlier
+shared-CLI checks. The UI-control service still failed, so the user performed the
+interactions while process/receipt checks supplied independent evidence.
+
+The subsequent **red close during Exit Windows Steam** check failed: a timestamped
+process capture showed the manager disappear while its Python shutdown worker was
+still running and reparented; Steam remained open. This invalidates the earlier
+inference that the passing quit-policy tests established the actual window path.
+The 0.2.1 correction gives AppKit ownership of the window, strongly owns the model
+in its delegate, and resubmits busy quit requests only after successful completion.
+Eight native integration cases pass with isolated workers, including actual AppKit
+close-button dispatch, failed operations and diagnostic cancellation. Live retest
+of the rebuilt app is tracked separately; no gameplay is part of these checks.
+
+Private UI evidence is under `DeadlockData/ui-acceptance/2026-10-14/`. External
+hardware detected in this session is an LG UltraGear at 2560×1440/144 Hz on HDMI,
+with the built-in display still primary. The user's intended use is many displays
+while hotdesking; this hardware detection is not an external gameplay pass.

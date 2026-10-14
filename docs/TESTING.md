@@ -84,6 +84,15 @@ benchmark log rotation, PID filtering and metadata privacy. Packaging tests inje
 build failures and concurrent outputs to verify incomplete apps are not published.
 macOS CI compiles/runs `tests/native/manager_lifecycle_test.swift` against the same
 quit policy used by the UI (idle, active operation, failure and diagnostic cleanup).
+On macOS 15+, `python3 packaging/check_manager_app.py` additionally builds an
+isolated test app with the real AppKit delegate, window, SwiftUI content, model and
+process runner. Its fake CLI exercises the actual close button and application
+quit action during successful, failed and cancelled operations, including a quit
+before the diagnostic worker is registered. It checks that cleanup completes
+before termination, failures keep the manager available, and asynchronous
+completion does not stall. It never opens Steam or starts gameplay. These native
+integration tests run in a separate macOS 15 CI job; policy tests alone did not
+catch the 0.2.0 SwiftUI window ownership regression.
 Native Wine probes are opt-in local checks, not run by credential-free unit CI.
 
 ## Menu-only lifecycle checks (no gameplay)

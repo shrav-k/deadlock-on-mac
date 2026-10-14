@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1 — development
+
+- Own the manager window and application lifecycle in AppKit while retaining the
+  SwiftUI interface. The actual 0.2.0 red-close check exposed premature manager
+  termination with a shutdown worker still running.
+- Cancel busy quit requests and resubmit after successful worker completion on
+  the normal event loop; leave failures visible and finish diagnostic cleanup.
+- Add eight native application integration scenarios with the real close button,
+  app quit action and isolated fake workers, plus a macOS 15 CI job.
+- Research external-display hotdesking, refresh/pacing, upstream DXMT resize fixes,
+  current Wine/renderer candidates and Rosetta alternatives without changing the
+  installed game runtime or claiming unmeasured performance gains.
+
 ## 0.2.0 — development
 
 - Replace the unreliable Wine close-window request with Steam's non-forced

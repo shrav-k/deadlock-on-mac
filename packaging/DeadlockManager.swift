@@ -57,7 +57,10 @@ final class ManagerModel: ObservableObject {
     private func finished(success: Bool) {
         activeProcess = nil
         let result = lifecycle.finish(success: success)
-        if result.replyToQuit { NSApp.reply(toApplicationShouldTerminate: result.shouldQuit) }
+        // A busy quit was cancelled, not deferred into AppKit's modal termination
+        // loop. Resubmit only after the worker has finished successfully so its
+        // MainActor output/completion callbacks keep running on the normal loop.
+        if result.shouldQuit { NSApp.terminate(nil) }
     }
 
     func play() {
@@ -281,49 +284,86 @@ struct ContentView: View {
     }
 }
 
-@main
-struct DeadlockManagerApp: App {
-    @NSApplicationDelegateAdaptor(ManagerAppDelegate.self) private var appDelegate
-    @StateObject private var model = ManagerModel()
-    var body: some Scene {
-        Window("Deadlock Manager", id: "manager") {
-            ContentView(model: model)
-                .background(WindowAttachment(delegate: appDelegate))
-                .onAppear { appDelegate.model = model }
-        }.windowResizability(.contentMinSize)
-    }
-}
-
 @MainActor
 final class ManagerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    weak var model: ManagerModel?
+    // AppKit owns this single utility window. Replacing the delegate of a
+    // SwiftUI-owned Window is unreliable: SwiftUI can reclaim it and close the
+    // app while a child operation is still running.
+    let model = ManagerModel()
+    private(set) var window: NSWindow?
+    private let presentWindow: Bool
+
+    init(presentWindow: Bool = true) { self.presentWindow = presentWindow }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 780),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                              backing: .buffered, defer: false)
+        window.title = "Deadlock Manager"
+        window.isReleasedWhenClosed = false
+        window.contentMinSize = NSSize(width: 800, height: 740)
+        window.contentView = NSHostingView(rootView: ContentView(model: model))
+        window.delegate = self
+        window.center()
+        self.window = window
+        installMenu()
+        if presentWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func installMenu() {
+        let menu = NSMenu()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About Deadlock Manager", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide Deadlock Manager", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit Deadlock Manager", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let appItem = menu.addItem(withTitle: "Deadlock Manager", action: nil, keyEquivalent: "")
+        appItem.submenu = appMenu
+        let editMenu = NSMenu(title: "Edit")
+        for (title, action, key) in [("Undo", "undo:", "z"), ("Cut", "cut:", "x"),
+                                     ("Copy", "copy:", "c"), ("Paste", "paste:", "v"),
+                                     ("Select All", "selectAll:", "a")] {
+            editMenu.addItem(withTitle: title, action: Selector(action), keyEquivalent: key)
+        }
+        menu.addItem(withTitle: "Edit", action: nil, keyEquivalent: "").submenu = editMenu
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        menu.addItem(withTitle: "Window", action: nil, keyEquivalent: "").submenu = windowMenu
+        NSApp.mainMenu = menu
+        NSApp.windowsMenu = windowMenu
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model else { return .terminateNow }
-        return model.requestQuit() == .quitNow ? .terminateNow : .terminateLater
+        return model.requestQuit() == .quitNow ? .terminateNow : .terminateCancel
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         NSApp.terminate(nil)
         return false // Keep the window visible until an active operation finishes.
     }
-}
 
-private struct WindowAttachment: NSViewRepresentable {
-    let delegate: ManagerAppDelegate
-    func makeNSView(context: Context) -> AttachedView { AttachedView(delegate: delegate) }
-    func updateNSView(_ nsView: AttachedView, context: Context) {}
-
-    final class AttachedView: NSView {
-        let managerDelegate: ManagerAppDelegate
-        init(delegate: ManagerAppDelegate) {
-            managerDelegate = delegate
-            super.init(frame: .zero)
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            window?.makeKeyAndOrderFront(nil)
         }
-        required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            window?.delegate = managerDelegate
-        }
+        return true
     }
 }
+
+#if !MANAGER_APP_TESTS
+@main
+struct DeadlockManagerApp {
+    @MainActor static func main() {
+        let app = NSApplication.shared
+        let delegate = ManagerAppDelegate()
+        app.setActivationPolicy(.regular)
+        app.delegate = delegate
+        withExtendedLifetime(delegate) { app.run() }
+    }
+}
+#endif

@@ -1,5 +1,10 @@
 # Controlled performance tests
 
+For current external-display research and hotdesking acceptance, see
+[EXTERNAL-DISPLAYS.md](EXTERNAL-DISPLAYS.md). Detect each desk's monitor before
+applying a saved laptop resolution; the connected monitor is not necessarily the
+primary display or the game's target.
+
 Start with one working runtime, AC power, Low Power Mode off, and a repeatable Hero
 Sandbox route. `doctor` reports power status without changing system settings.
 Keep Steam online under your existing account. Avoid runtime downloads/builds or
