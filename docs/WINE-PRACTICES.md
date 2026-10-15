@@ -56,9 +56,31 @@ The installed Deadlock configuration contains `setting.monitor_index`, and both
 current renderer DLLs refer to it. Inspection of the installed `tier0.dll` monitor
 helpers shows bounds-checked, zero-based access to SDL's display list. That is a
 candidate configuration path, not proof that every launch mode honors the saved
-value. The current file contains index 1, 2880×1800 borderless and a saved viewport
-scale of 0.4. Those values were preserved; they must not be described as the
+value. The initial file contained index 1, 2880×1800 borderless and a saved viewport
+scale of 0.4. Those values were preserved during read-only investigation; they must not be described as the
 previous laptop acceptance settings or verified live rendering settings.
+
+### Window activation and Spaces
+
+Our matched CrossOver-derived Wine source and upstream `cocoa_app.m` use
+`WineAppWillActivateNotification` to ask other Wine applications in the same prefix
+to yield activation. Since macOS 14 the receiving foreground app uses
+`yieldActivation(to:)` followed by `activate(from:options:)` to handle a notification
+race. The native manager originally did not participate. Version 0.3.1 implements
+that handoff for a user-initiated launch with prefix, engine executable, foreground,
+expiry and duplicate-PID guards. It does not repeatedly steal focus or move another
+app's windows. [Wine source](https://github.com/wine-mirror/wine/blob/wine-11.0/dlls/winemac.drv/cocoa_app.m),
+[Apple yield API](https://developer.apple.com/documentation/appkit/nsapplication/yieldactivation(to:)),
+[Apple activate API](https://developer.apple.com/documentation/appkit/nsrunningapplication/activate(from:options:))
+
+This is a candidate remedy, not proof of the LG failure's cause. On the first LG
+attempt the user never saw a game window despite Metal rendering samples. Neither
+Win32 activation nor a Metal drawable proves visibility in the active macOS Space.
+Apple documents that a Space shows its own windows and that application switching
+behavior is configurable. Do not change the user's global Spaces preferences as a
+blanket workaround. Coordinate a manager-button test and record real coverage,
+pointer alignment, Command–Tab and exit separately.
+[Apple Spaces guide](https://support.apple.com/guide/mac-help/work-in-multiple-spaces-mh14112/mac)
 
 SDL can enumerate displays and map each one to its Windows monitor handle. Its
 instance IDs change after reconnect, so neither a transient ID nor a hardcoded

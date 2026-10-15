@@ -22,7 +22,7 @@ jobs:
       - run: python bin/deadlock-mac --help
       - name: Check native app source
         if: matrix.os == 'macos-14' && matrix.python == '3.13'
-        run: xcrun swiftc -typecheck -parse-as-library -target arm64-apple-macos15.0 packaging/ManagerLifecycle.swift packaging/DeadlockManager.swift
+        run: xcrun swiftc -typecheck -parse-as-library -target arm64-apple-macos15.0 packaging/ManagerLifecycle.swift packaging/WineActivation.swift packaging/DeadlockManager.swift
       - name: Test manager quit lifecycle without a game
         if: matrix.os == 'macos-14' && matrix.python == '3.13'
         run: |

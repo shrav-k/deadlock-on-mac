@@ -17,7 +17,8 @@ struct ManagerAppTests {
         var retryQuitAfterFailure = false
         let shouldFail = scenario.contains("failure")
         let idle = scenario == "idle-close"
-        let diagnostic = scenario.contains("diagnostic")
+        let grid = scenario.contains("grid")
+        let diagnostic = scenario.contains("diagnostic") || grid
         let observer = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
                                                                object: app, queue: .main) { _ in
             MainActor.assumeIsolated {
@@ -37,7 +38,7 @@ struct ManagerAppTests {
             precondition(delegate.window?.delegate === delegate)
             delegate.model.workspace = workspace
             if !idle {
-                delegate.model.run(diagnostic ? ["game-mode", "--test"] : [shouldFail ? "failure" : "steam-exit"],
+                delegate.model.run(grid ? ["display", "--test-window"] : diagnostic ? ["game-mode", "--test"] : [shouldFail ? "failure" : "steam-exit"],
                                    label: "Test operation")
             }
             let request = {
@@ -51,17 +52,17 @@ struct ManagerAppTests {
                 if !idle {
                     precondition(delegate.model.running, "Worker unexpectedly finished before the test request")
                     precondition(delegate.model.operationStartedAt != nil)
-                    precondition(delegate.model.status.contains(diagnostic ? "Restoring" : "Finishing"))
+                    precondition(delegate.model.status.contains(grid ? "Closing" : diagnostic ? "Restoring" : "Finishing"))
                 }
             }
-            if scenario == "diagnostic-before-spawn" { request() }
+            if scenario.contains("before-spawn") { request() }
             else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: request) }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             // An immediate cancellation may arrive before Python installs its
             // cleanup handler. No diagnostic started in that case; the safe
             // outcome is a visible startup failure, not a claimed restoration.
-            let cancelledBeforeStart = scenario == "diagnostic-before-spawn"
+            let cancelledBeforeStart = scenario.contains("before-spawn")
                 && !FileManager.default.fileExists(atPath: marker.path)
             if shouldFail || cancelledBeforeStart {
                 precondition(requested && !delegate.model.running)

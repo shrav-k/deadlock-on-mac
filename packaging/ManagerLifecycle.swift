@@ -10,6 +10,8 @@ struct ManagerLifecycle {
     var testingGameMode: Bool {
         command?.first == "game-mode" && command?.contains("--test") == true
     }
+    var testingDisplay: Bool { command == ["display", "--test-window"] }
+    var cancellableDiagnostic: Bool { testingGameMode || testingDisplay }
 
     mutating func begin(_ command: [String]) -> Bool {
         guard !running, !command.isEmpty else { return false }
@@ -20,7 +22,7 @@ struct ManagerLifecycle {
     mutating func requestQuit() -> ManagerQuitDecision {
         guard running else { return .quitNow }
         quitPending = true
-        return testingGameMode ? .stopDiagnosticAndWait : .waitForOperation
+        return cancellableDiagnostic ? .stopDiagnosticAndWait : .waitForOperation
     }
 
     // Failed operations keep the manager available to show errors/recovery steps.

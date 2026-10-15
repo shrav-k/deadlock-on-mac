@@ -71,12 +71,15 @@ Steam restart. Gameplay performance at this resolution remains unmeasured;
 1920×1200 fullscreen still has coverage/focus failures. See the baseline guide
 before applying display-specific settings.
 
-The 0.3.0 preview adds a **Play on** display picker. Close Windows Steam, click
+The preview includes a **Play on** display picker. Close Windows Steam, click
 **Refresh displays**, select the monitor and **Prepare display**. The manager
 preserves macOS's main display and checks the selection again before Play. A
 changed or disconnected display requires preparation again; it never silently
 chooses a different screen. Use **Test grid** and the game menu to verify scaling
-and input before gameplay. See [display setup and limits](docs/EXTERNAL-DISPLAYS.md).
+and input before gameplay. The 0.3.1 grid stays open until Escape or **Stop Grid**;
+launch it from the manager to exercise the new native activation handoff. The
+initial LG game window was not visible to the user, so secondary-display support
+is still under validation. See [display setup and limits](docs/EXTERNAL-DISPLAYS.md).
 
 ## Layout
 

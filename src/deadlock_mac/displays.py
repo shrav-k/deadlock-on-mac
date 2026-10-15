@@ -110,7 +110,7 @@ def require_supported(profile):
         raise ManagerError('Display preparation currently supports the qualified Highball Wine runtime only.')
 
 
-def probe(profile, *, window_index=None, allow_running=False):
+def probe(profile, *, window_index=None, allow_running=False, stopped=None, report=print):
     """Start only a diagnostic in an otherwise closed bottle and end it normally."""
     from .game_session import processes_in_prefix
     running = wine_processes_running()
@@ -127,8 +127,12 @@ def probe(profile, *, window_index=None, allow_running=False):
     if window_index is not None:
         command += ['--window-index', str(window_index)]
     try:
-        result = subprocess.run(command, env=env, cwd=profile['prefix'], capture_output=True,
-                                text=True, timeout=120 if window_index is not None else 45)
+        if window_index is not None:
+            from .display_test import run
+            result = run(command, env=env, cwd=profile['prefix'], stopped=stopped, report=report)
+        else:
+            result = subprocess.run(command, env=env, cwd=profile['prefix'], capture_output=True,
+                                    text=True, timeout=45)
     finally:
         # Never stop a Steam/game that appeared during the diagnostic. wineboot
         # requests normal session shutdown, not a wineserver kill.
@@ -228,10 +232,13 @@ def clear(workspace, profile):
 
 
 def test_window(workspace, profile):
-    state = validate_launch(workspace, profile, live=False)
-    if not state:
-        raise ManagerError('Prepare a display before running the test window.')
-    output = probe(profile, window_index=state['guest']['index'])
+    from .display_test import cancellation
+    with cancellation() as stopped:
+        state = validate_launch(workspace, profile, live=False)
+        if not state:
+            raise ManagerError('Prepare a display before running the test window.')
+        print('The grid stays open until Escape, Close, or Stop Grid. No gameplay starts.', flush=True)
+        output = probe(profile, window_index=state['guest']['index'], stopped=stopped)
     if topology(host_inventory()) != state['topology']:
         raise ManagerError('Display arrangement changed during the test. Prepare it again.')
     folder = private_dir(Path(workspace) / 'DeadlockData/display-tests' / profile['id'])
@@ -251,4 +258,5 @@ def window_observations(output, size):
     focus = re.findall(r'^window_active=([01])$', output, re.M)
     return {'corner_targets_hit': hit, 'all_corner_targets_hit': all(hit),
             'focus_left_and_returned': '101' in ''.join(focus),
-            'closed_normally': 'test_window_closed=yes result=0' in output}
+            'closed_normally': 'test_window_closed=yes result=0' in output,
+            'close_reason': (re.findall(r'test_window_closed=yes result=\d+ reason=([a-z_]+)', output) or ['unknown'])[0]}

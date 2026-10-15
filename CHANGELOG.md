@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 — development
+
+- Respond to Wine's cooperative activation request after manager-initiated Play,
+  Steam or grid launches. Require the selected prefix and engine, an active manager,
+  and a short startup interval; never move windows or change macOS Spaces.
+- Keep the grid open until Escape/Close or Stop Grid. Stream its readiness/click
+  events, record the close reason, and close the owned helper if its parent exits.
+- Cover cancellation, busy manager close/quit, and activation eligibility with
+  automated tests. The user never saw the previous LG game window; this remains
+  an unresolved visual acceptance failure until the new handoff is checked live.
+
 ## 0.3.0 — development
 
 - Add a named display picker, main-display/external preferences and separate Retina

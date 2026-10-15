@@ -393,7 +393,35 @@ the watcher confirmed prior Game Mode policy `auto` restored with no pending
 recovery. Actual button/menu placement, pointer alignment and Command–Tab
 confirmation are pending; gameplay remains paused.
 
+User follow-up: **no Deadlock window was ever visible**. This is a failed visual
+launch check, despite the process/Metal evidence and clean CLI shutdown. The grid
+was also unseen or missed before its old 90-second timer expired. Do not promote
+this display configuration as visually verified.
+
 Automated coverage includes selection and missing/ambiguous displays, negative
 coordinates, reordered indices, Retina mapping, changes during preparation,
 rollback, SDL/configuration updates, disabled management and actual input-evidence
 parsing. Native picker-model tests and all nine AppKit lifecycle scenarios pass.
+
+## 0.3.1 activation candidate and diagnostic lifecycle — 2026-10-14
+
+The manager now responds to the selected Wine engine's cooperative activation
+request during a foreground, user-initiated launch. Automated tests verify prefix
+and executable guards, expiry, background rejection and duplicate-PID handling.
+No actual macOS activation/visible-LG success is claimed yet.
+
+The grid now uses a parent-owned stdin control pipe with no observation timer;
+Escape/Close, Stop Grid or manager quit ends it. The first real Highball control
+check rejected `PeekNamedPipe` on inherited Unix stdin. Switching the owned helper
+to `ReadFile` on a separate thread passed the real Wine check: ready, parent pipe
+closed, child result 0, normal bottle shutdown. No window, Steam, game or Game
+Mode change was involved. Reproduce after helper/runtime changes with:
+
+```sh
+python3 packaging/build_display_tools.py --downloads ../Downloads
+python3 packaging/check_display_control.py --workspace .. --profile highball
+```
+
+141 Python tests, 12 native AppKit lifecycle scenarios, the display model,
+activation eligibility and lifecycle policy tests pass locally. Actual LG grid
+coverage/clicks/Command–Tab, game menu placement and button exit are pending.

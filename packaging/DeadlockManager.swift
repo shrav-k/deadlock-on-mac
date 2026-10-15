@@ -38,10 +38,13 @@ final class ManagerModel: ObservableObject {
     @Published private(set) var operationStartedAt: Date?
     @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
     var testingGameMode: Bool { lifecycle.testingGameMode }
+    var testingDisplay: Bool { lifecycle.testingDisplay }
+    private let activationHandoff = WineActivationHandoff()
     @Published var automaticGameMode = UserDefaults.standard.object(forKey: "automaticGameMode") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automaticGameMode, forKey: "automaticGameMode") }
     }
     private var activeProcess: Process?
+    private var diagnosticStopRequested = false
     @Published var displays: [ConnectedDisplay] = []
     @Published var displayChoice = "default"
     @Published var retinaPolicy = "auto"
@@ -85,7 +88,13 @@ final class ManagerModel: ObservableObject {
             label: arguments.contains("--test") ? "Game Mode test running; keep this app open." : "Checking Game Mode…")
     }
 
-    func stopGameModeTest() { activeProcess?.terminate() }
+    private func stopDiagnostic() {
+        guard lifecycle.cancellableDiagnostic else { return }
+        diagnosticStopRequested = true
+        activeProcess?.terminate()
+    }
+    func stopGameModeTest() { stopDiagnostic() }
+    func stopDisplayTest() { stopDiagnostic() }
 
     func requestQuit() -> ManagerQuitDecision {
         let decision = lifecycle.requestQuit()
@@ -94,8 +103,8 @@ final class ManagerModel: ObservableObject {
         case .waitForOperation:
             status = "Finishing the current operation before quitting the manager…"
         case .stopDiagnosticAndWait:
-            status = "Restoring Game Mode before quitting the manager…"
-            stopGameModeTest()
+            status = testingDisplay ? "Closing the test grid before quitting the manager…" : "Restoring Game Mode before quitting the manager…"
+            stopDiagnostic()
         }
         return decision
     }
@@ -130,9 +139,13 @@ final class ManagerModel: ObservableObject {
         guard !running, let resources = Bundle.main.resourceURL, lifecycle.begin(command) else { return }
         status = label
         output = ""
+        diagnosticStopRequested = false
         operationStartedAt = Date()
         let selectedWorkspace = workspace
         let selectedProfile = profile
+        activationHandoff.arm(workspace: selectedWorkspace, profile: selectedProfile, command: command) { [weak self] text in
+            self?.output += text
+        }
         Task.detached {
             let process = Process()
             process.executableURL = resources.appendingPathComponent("python/bin/python3")
@@ -151,7 +164,9 @@ final class ManagerModel: ObservableObject {
                 try process.run()
                 await MainActor.run {
                     self.activeProcess = process
-                    if self.lifecycle.quitPending && self.testingGameMode { process.terminate() }
+                    if (self.lifecycle.quitPending || self.diagnosticStopRequested) && self.lifecycle.cancellableDiagnostic {
+                        process.terminate()
+                    }
                 }
                 while true {
                     let data = pipe.fileHandleForReading.availableData
@@ -293,13 +308,16 @@ struct ContentView: View {
                             Text("Off").tag("off")
                         }.frame(width: 280)
                         Button("Prepare display") { model.prepareDisplay() }
-                        Button("Test grid") { model.run(["display", "--test-window"], label: "Test grid: click four corner squares, Command–Tab away/back, then Escape to close (90s limit)…") }
+                        Button("Test grid") { model.run(["display", "--test-window"], label: "Test grid: click four corner squares, Command–Tab away/back, then Escape or Stop Grid to close…") }
                     }
                     Text(model.displaySummary).font(.caption).fixedSize(horizontal: false, vertical: true)
                     Text("Preparation requires Steam closed and changes borderless size plus bottle-wide Retina scaling with backups. Missing displays or changed layouts stop Play until prepared again. Test grid uses no gameplay; Escape closes it.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Let the game manage displays") { model.run(["display", "--clear"], label: "Disabling display management…") }
                 }.padding(5).disabled(model.running)
+                if model.testingDisplay {
+                    Button("Stop Grid") { model.stopDisplayTest() }
+                }
                 Divider()
                 HStack {
                     Picker("Mode", selection: $displayMode) {

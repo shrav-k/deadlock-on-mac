@@ -29,9 +29,11 @@ unmanaged until their coordinate adapters are qualified.
 
 The test grid uses the same D3D11/DXMT path without gameplay. It shows a white
 six-pixel border, 100-pixel grid and colored targets centered 80 pixels from each
-corner. Click all four squares, Command–Tab away/back and press Escape. It closes
-automatically after 90 seconds; this diagnostic deadline never limits normal
-Play. Coordinates, buffer size, actual click events and focus transitions are
+corner. Click all four squares, Command–Tab away/back and press Escape. Starting
+with 0.3.1 it stays open until Escape/Close or the manager's **Stop Grid** button.
+Closing/quitting the manager requests grid shutdown and waits for cleanup. The
+helper also exits when its private parent pipe closes. Coordinates, buffer size,
+actual click events, close reason and focus transitions are
 saved privately. Geometry is not a substitute for visual/input confirmation.
 
 CLI equivalents (build helpers first when using a source checkout):
@@ -47,11 +49,23 @@ python3 bin/deadlock-mac launch
 Local 2026-10-14 test: named LG preparation selected SDL index 1, disabled Retina,
 and configured 2560×1440 borderless while the built-in display stayed primary.
 The grid reported window `(1512,-458)–(4072,982)`, client/buffer 2560×1440, and
-closed with result 0. Its first run received no corner clicks; visual coverage,
-actual pointer alignment, Command–Tab and Deadlock menu coverage are still pending.
+closed with result 0. Its first run received no corner clicks. The user subsequently
+reported missing the grid or never seeing it, and **never seeing a Deadlock window**.
+GPU log samples do not override that result. Visual coverage, pointer alignment
+and Command–Tab remain unverified; the game-window acceptance check failed.
 The manager CLI Exit command subsequently closed the Steam-launched game normally
 and the watcher restored Game Mode to its previous `auto` policy.
 No gameplay or performance qualification is implied.
+
+Version 0.3.1 adds a manager-side cooperative activation handoff using Wine's
+existing notification and Apple's public activation APIs. It applies only to a
+user-initiated launch, the selected prefix and engine executable, while the manager
+is foreground, once per PID within 180 seconds. This is a startup handoff interval,
+not a limit on play or on the grid. Launching through a background terminal cannot
+prove this manager-specific behavior. Start **Test grid** from the manager when
+ready, then report whether it appears before trying another game-menu launch.
+An API accepting activation still does not prove on-screen visibility. Other
+Spaces/occlusion remain possible causes; no main-display change is required.
 
 
 Research checked **2026-10-14**. Recommendations below are experiments, not measured
@@ -80,12 +94,11 @@ for the initial comparison and record them. Do not describe this as native
 internal rendering unless render scale is verified. Validate coverage, pointer
 alignment, Command–Tab, manager Exit and desktop restoration before gameplay.
 
-**Later investigation:** the user wants monitor selection without changing the
+**Initial investigation (superseded by the picker above):** the user wants monitor selection without changing the
 macOS primary display. Win32, DXGI and the game's SDL3 enumerate the secondary LG,
 but Retina mode makes them report it as 5120×2880 while native macOS reports
-2560×1440 at 1×. The current saved game file is 2880×1800 borderless with monitor
-index 1; it was left unchanged. Do not apply the proposed baseline until output
-selection and scaling are qualified. [Wine/CodeWeavers review](WINE-PRACTICES.md)
+2560×1440 at 1×. The initial saved game file was 2880×1800 borderless with monitor
+index 1; it was preserved during that read-only comparison. [Wine/CodeWeavers review](WINE-PRACTICES.md)
 contains the isolated comparison, source limitations and manager-picker design.
 Making the external screen primary is an optional workaround, not a requirement.
 

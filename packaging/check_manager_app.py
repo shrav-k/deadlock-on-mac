@@ -42,11 +42,12 @@ def main():
         subprocess.run(['/usr/bin/xcrun', 'swiftc', '-parse-as-library', '-D', 'MANAGER_APP_TESTS',
                         '-target', f'{platform.machine()}-apple-macos15.0',
                         str(REPO / 'packaging/ManagerLifecycle.swift'),
+                        str(REPO / 'packaging/WineActivation.swift'),
                         str(REPO / 'packaging/DeadlockManager.swift'),
                         str(REPO / 'tests/native/manager_app_test.swift'), '-o', str(binary)], check=True)
         for scenario in ('idle-close', 'success-close', 'success-quit', 'failure-close',
                          'failure-quit', 'failure-close-retry-quit', 'diagnostic-close',
-                         'diagnostic-quit', 'diagnostic-before-spawn'):
+                         'diagnostic-quit', 'diagnostic-before-spawn', 'grid-close', 'grid-quit', 'grid-before-spawn'):
             workspace = root / scenario
             workspace.mkdir()
             env = dict(os.environ, NSUnbufferedIO='YES')
@@ -57,10 +58,18 @@ def main():
             print(result.stdout.strip())
         display_test = root / 'DisplayModelTests'
         subprocess.run(['/usr/bin/xcrun', 'swiftc', '-parse-as-library', '-D', 'MANAGER_APP_TESTS',
+                        '-target', f'{platform.machine()}-apple-macos15.0',
                         str(REPO / 'packaging/ManagerLifecycle.swift'),
+                        str(REPO / 'packaging/WineActivation.swift'),
                         str(REPO / 'packaging/DeadlockManager.swift'),
                         str(REPO / 'tests/native/display_model_test.swift'), '-o', str(display_test)], check=True)
         subprocess.run([str(display_test)], check=True, timeout=10)
+        activation_test = root / 'ActivationTests'
+        subprocess.run(['/usr/bin/xcrun', 'swiftc', '-parse-as-library',
+                        '-target', f'{platform.machine()}-apple-macos15.0',
+                        str(REPO / 'packaging/WineActivation.swift'),
+                        str(REPO / 'tests/native/wine_activation_test.swift'), '-o', str(activation_test)], check=True)
+        subprocess.run([str(activation_test)], check=True, timeout=10)
 
 
 if __name__ == '__main__':

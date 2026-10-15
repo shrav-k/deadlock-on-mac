@@ -241,7 +241,7 @@ def main(argv=None):
     action = p.add_mutually_exclusive_group()
     action.add_argument("--prepare", help="default, external, or a connected display UUID; requires Steam closed")
     action.add_argument("--clear", action="store_true", help="Stop managing display selection, preserving current settings")
-    action.add_argument("--test-window", action="store_true", help="Show a 90-second grid on the prepared display; Escape closes it")
+    action.add_argument("--test-window", action="store_true", help="Show a grid until Escape/Close; Ctrl-C or manager Stop Grid also closes it")
     p.add_argument("--retina", choices=("auto", "on", "off"), default="auto")
     p = sub.add_parser("performance", help="Inspect or change reversible launch settings; Steam must be closed to change them")
     p.add_argument("--fps-cap", type=int)
