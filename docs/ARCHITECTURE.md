@@ -19,6 +19,7 @@ must not be described as proof that the game works out of the box.
 | `backup.py` | Offline, game-only snapshots with a file hash manifest |
 | `diagnostics.py` | Read-only native dependency inspection, with explicit scope and unresolved libraries |
 | `performance.py` | Validated per-profile FPS cap, Wine synchronization and Metal HUD settings |
+| `displays.py` / `native/` | Named host displays, guest mapping, offline preparation and Play validation; no macOS display changes |
 | `game_settings.py` | Narrow, offline display edits with backups; preserves quality and render scale |
 | `game_mode.py` | Optional Apple-tool status, bounded system-wide Game Mode tests and recovery receipts |
 | `game_session.py` / `session_worker.py` | Detached normal-Play lifetime, per-user policy ownership, bottle matching and prior-policy recovery |

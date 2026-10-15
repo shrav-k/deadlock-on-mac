@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 — development
+
+- Add a named display picker, main-display/external preferences and separate Retina
+  policy. Preparing a display backs up game settings and changes only its bottle;
+  the macOS primary display and desktop modes are never changed.
+- Map native display identity/geometry to the installed game's SDL enumeration,
+  and reject missing/ambiguous targets or changed layouts/settings before Play.
+- Add a bounded borderless D3D11 test grid with click/focus evidence, plus packaged,
+  hash-verified native helpers built with a pinned Windows compiler.
+- Add display selection, rollback, hotplug, configuration-change and UI-model tests.
+  The LG test grid and Steam-launched game closed normally through the manager;
+  live menu coverage, pointer and Command–Tab acceptance remain pending.
+
 ## 0.2.2 — development
 
 - Keep operation feedback beside Exit controls, display elapsed time and periodic

@@ -64,3 +64,19 @@ verifies the DLL hashes and includes license/provenance. Fresh bootstrap stages
 that payload and enables it before Steam starts, while honoring explicit rollback.
 A source-only preview without this option does not include the hotfix. Public
 distribution still requires corresponding-source/license review and notarization.
+
+## Display helpers
+
+The app builder compiles `native/host_displays.swift` with Apple's Command Line
+Tools and `native/wine_displays.c` with the SHA-256-pinned LLVM-MinGW archive
+already recorded in `config/wine-hotfix.json`. The source-checkout helpers can be
+built separately with `python3 packaging/build_display_tools.py --downloads
+../Downloads`. The unpacked compiler is temporary and removed after compilation;
+the verified download is cached. Only the small helpers, provenance receipt,
+sources and runtime notices enter the app. Players need no compiler or Xcode for
+display selection. The independent Game Mode tool requirement is unchanged.
+
+Native helper hashes are sealed after ad-hoc signing; the enclosing app is then
+resealed and strictly verified. CI compiles both helpers and runs the display
+policy tests without starting Wine, Steam or a game. A local test grid and real
+menu acceptance remain separate requirements.

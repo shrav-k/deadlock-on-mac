@@ -35,7 +35,7 @@ def plan(profile):
     return path, content, video
 
 
-def configure(workspace, profile, *, apply=False, check_running=None, mode="fullscreen", width=1920, height=1080):
+def configure(workspace, profile, *, apply=False, check_running=None, mode="fullscreen", width=1920, height=1080, monitor_index=None):
     from .backup import wine_processes_running
     if mode not in ("fullscreen", "borderless") or type(width) is not int or type(height) is not int or not (640 <= width <= 7680 and 480 <= height <= 4320):
         raise ManagerError("Choose fullscreen/borderless and a supported display size (640–7680 by 480–4320).")
@@ -45,6 +45,10 @@ def configure(workspace, profile, *, apply=False, check_running=None, mode="full
     if apply and (check_running or wine_processes_running)():
         raise ManagerError("Exit Windows Steam and all Wine bottles before editing graphics settings.")
     path, original, video = plan(profile)
+    if monitor_index is not None:
+        if type(monitor_index) is not int or not 0 <= monitor_index < 32 or "setting.monitor_index" not in video:
+            raise ManagerError("Invalid or unsupported game monitor index; no graphics settings were changed.")
+        settings["setting.monitor_index"] = str(monitor_index)
     changes = {key: {"before": video[key], "after": value} for key, value in settings.items()}
     if not apply:
         return {"applied": False, "changes": changes, "note": "Only output resolution/display mode change; existing render scale and quality are preserved."}

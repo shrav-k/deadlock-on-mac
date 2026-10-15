@@ -1,6 +1,27 @@
 import SwiftUI
 import AppKit
 
+struct ConnectedDisplay: Identifiable, Decodable {
+    let id: String
+    let name: String
+    let main: Bool
+    let builtin: Bool
+    let mode_pixels: [Int]
+    var label: String { "\(name) · \(mode_pixels.map(String.init).joined(separator: "×"))\(main ? " · Main" : "")" }
+}
+
+struct DisplaySelection: Decodable {
+    let phase: String
+    let choice: String?
+    let retina_policy: String?
+    let target_name: String?
+}
+
+struct DisplayReport: Decodable {
+    let displays: [ConnectedDisplay]
+    let selection: DisplaySelection?
+}
+
 @MainActor
 final class ManagerModel: ObservableObject {
     @Published var workspace = UserDefaults.standard.string(forKey: "workspace") ?? FileManager.default.homeDirectoryForCurrentUser
@@ -21,6 +42,30 @@ final class ManagerModel: ObservableObject {
         didSet { UserDefaults.standard.set(automaticGameMode, forKey: "automaticGameMode") }
     }
     private var activeProcess: Process?
+    @Published var displays: [ConnectedDisplay] = []
+    @Published var displayChoice = "default"
+    @Published var retinaPolicy = "auto"
+    @Published var displaySummary = "Refresh displays to choose where Deadlock opens."
+
+    func refreshDisplays() { run(["display"], label: "Reading connected displays…") }
+
+    var displayPrepareArguments: [String] { ["display", "--prepare", displayChoice, "--retina", retinaPolicy] }
+    func prepareDisplay() {
+        run(displayPrepareArguments, label: "Preparing the selected display; keep Steam closed…")
+    }
+
+    func readDisplayReport() {
+        guard let data = output.data(using: .utf8),
+              let report = try? JSONDecoder().decode(DisplayReport.self, from: data) else { return }
+        displays = report.displays
+        displayChoice = report.selection?.choice ?? "default"
+        retinaPolicy = report.selection?.retina_policy ?? "auto"
+        if let selected = report.selection, selected.phase == "ready" {
+            displaySummary = "Prepared: \(selected.target_name ?? displayChoice). Play checks for display and settings changes."
+        } else {
+            displaySummary = "Choose a display, close Windows Steam, then Prepare. macOS main display stays unchanged."
+        }
+    }
 
     func chooseGameModeTool() {
         let panel = NSOpenPanel()
@@ -132,6 +177,13 @@ final class ManagerModel: ObservableObject {
                                     "game-mode": "Game Mode operation finished. Check the policy in Details."]
                     self.status = code == 0 ? (messages[command.first ?? ""] ?? "Check complete.")
                         : "This step could not finish. See details below (code \(code))."
+                    if code == 0 && command == ["display"] { self.readDisplayReport() }
+                    if code == 0 && command.contains("--prepare") {
+                        self.displaySummary = "Display prepared. Open Steam, then Play; check the game menu before gameplay."
+                    }
+                    if code == 0 && command.contains("--clear") {
+                        self.displaySummary = "Display management is off; current game and Retina settings were preserved."
+                    }
                     self.finished(success: code == 0)
                 }
             } catch {
@@ -222,6 +274,33 @@ struct ContentView: View {
                 }
             }.disabled(model.running)
             GroupBox("Display settings") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Picker("Play on", selection: $model.displayChoice) {
+                            Text("System main display").tag("default")
+                            Text("Prefer external (one connected)").tag("external")
+                            ForEach(model.displays) { display in Text(display.label).tag(display.id) }
+                            if !["default", "external"].contains(model.displayChoice) && !model.displays.contains(where: { $0.id == model.displayChoice }) {
+                                Text("Saved display — disconnected").tag(model.displayChoice)
+                            }
+                        }
+                        Button("Refresh displays") { model.refreshDisplays() }
+                    }
+                    HStack {
+                        Picker("Retina scaling", selection: $model.retinaPolicy) {
+                            Text("Match selected display").tag("auto")
+                            Text("On").tag("on")
+                            Text("Off").tag("off")
+                        }.frame(width: 280)
+                        Button("Prepare display") { model.prepareDisplay() }
+                        Button("Test grid") { model.run(["display", "--test-window"], label: "Test grid: click four corner squares, Command–Tab away/back, then Escape to close (90s limit)…") }
+                    }
+                    Text(model.displaySummary).font(.caption).fixedSize(horizontal: false, vertical: true)
+                    Text("Preparation requires Steam closed and changes borderless size plus bottle-wide Retina scaling with backups. Missing displays or changed layouts stop Play until prepared again. Test grid uses no gameplay; Escape closes it.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Let the game manage displays") { model.run(["display", "--clear"], label: "Disabling display management…") }
+                }.padding(5).disabled(model.running)
+                Divider()
                 HStack {
                     Picker("Mode", selection: $displayMode) {
                         Text("Fullscreen").tag("fullscreen")
@@ -327,6 +406,7 @@ final class ManagerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         if presentWindow {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            model.refreshDisplays()
         }
     }
 

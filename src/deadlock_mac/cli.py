@@ -23,6 +23,7 @@ from . import game_exit
 from . import hotfix
 from . import benchmark
 from . import wine_display
+from . import displays
 from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
@@ -236,6 +237,12 @@ def main(argv=None):
     sub.add_parser("runtime-dependencies", help="Inspect direct Wine module imports for missing host libraries")
     sub.add_parser("backup", help="Snapshot Deadlock data while all Steam/Wine processes are closed")
     sub.add_parser("profiles", help="List configured runtime profiles")
+    p = sub.add_parser("display", help="List or prepare a named display without changing macOS main display")
+    action = p.add_mutually_exclusive_group()
+    action.add_argument("--prepare", help="default, external, or a connected display UUID; requires Steam closed")
+    action.add_argument("--clear", action="store_true", help="Stop managing display selection, preserving current settings")
+    action.add_argument("--test-window", action="store_true", help="Show a 90-second grid on the prepared display; Escape closes it")
+    p.add_argument("--retina", choices=("auto", "on", "off"), default="auto")
     p = sub.add_parser("performance", help="Inspect or change reversible launch settings; Steam must be closed to change them")
     p.add_argument("--fps-cap", type=int)
     p.add_argument("--sync", choices=("auto", "none", "msync", "esync"))
@@ -322,8 +329,12 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "steam-exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps"):
-            profile = load_profile(workspace, args.profile)
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "steam-exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps", "display"):
+            if (args.command == "display" and not (args.prepare or args.clear or args.test_window)
+                    and not profile_file(workspace, args.profile).exists()):
+                profile = {"id": args.profile}
+            else:
+                profile = load_profile(workspace, args.profile)
         if args.command == "runtime-dependencies":
             result = engine_dependencies(profile)
             print(json.dumps(result, indent=2))
@@ -338,7 +349,17 @@ def main(argv=None):
                               "provider": profile["provider"], "executes": False}, indent=2))
             return 0
         with lock(workspace / "DeadlockData"):
-            if args.command == "benchmark":
+            if args.command == "display":
+                if args.prepare:
+                    result = displays.prepare(workspace, profile, args.prepare, args.retina)
+                elif args.clear:
+                    result = displays.clear(workspace, profile)
+                elif args.test_window:
+                    result = displays.test_window(workspace, profile)
+                else:
+                    result = displays.status(workspace, profile)
+                print(json.dumps(result, indent=2))
+            elif args.command == "benchmark":
                 if args.action == "start":
                     result = benchmark.start(workspace, profile, args.scenario, args.resolution)
                 elif not args.run:
@@ -393,6 +414,10 @@ def main(argv=None):
                 logs = private_dir(workspace / "DeadlockData/logs" / args.profile)
                 log = logs / f"{args.command}-{timestamp()}.log"
                 tuning = performance.load(workspace, args.profile)
+                if args.command == "launch":
+                    target = displays.validate_launch(workspace, profile, live=args.without_game_mode)
+                    if target:
+                        print(f"Prepared display: {target['target_name']}. macOS main display is unchanged.")
                 if args.command == "launch" and not args.without_game_mode:
                     result = game_session.launch_session(workspace, args.profile, args.game_mode_tool, log)
                     print(f"Game Mode is on. Background watcher PID {result['watcher_pid']} will restore the prior policy when Deadlock exits; there is no play-time limit.")

@@ -231,6 +231,8 @@ def worker(workspace, profile_id, tool_path, response, log):
                 raise ManagerError("Restore the interrupted diagnostic test with game-mode --restore before Play.")
 
             def launch():
+                from .displays import validate_launch
+                validate_launch(workspace, profile)
                 start(profile, "launch", log, load(workspace, profile_id))
 
             def ready():

@@ -378,3 +378,22 @@ acceptance on this stack. Four normal Steam shutdowns passed after the one scope
 recovery. The cause of the earlier Steam update/session hang remains unresolved;
 these results do not establish that it cannot recur. External-display coverage,
 focus, gameplay and sustained performance remain separate acceptance work.
+
+## 0.3.0 display picker — 2026-10-14
+
+The named LG ULTRAGEAR preparation selected SDL monitor index 1 and configured
+2560×1440 borderless with Retina off. Native host inventory before/after retained
+the built-in screen as primary and the LG at 2560×1440@144 Hz, origin (1512,-458).
+The owned D3D11 grid returned client/buffer 2560×1440 and closed normally. No
+corner-click events were received in the initial timed run, so input/visual
+acceptance is not claimed. The following menu-only launch through signed-in
+Windows Steam created a Deadlock process, enabled the Game Mode watcher and
+produced game-specific Metal HUD samples. The normal manager CLI Exit request closed PID 65924 without forced termination;
+the watcher confirmed prior Game Mode policy `auto` restored with no pending
+recovery. Actual button/menu placement, pointer alignment and Command–Tab
+confirmation are pending; gameplay remains paused.
+
+Automated coverage includes selection and missing/ambiguous displays, negative
+coordinates, reordered indices, Retina mapping, changes during preparation,
+rollback, SDL/configuration updates, disabled management and actual input-evidence
+parsing. Native picker-model tests and all nine AppKit lifecycle scenarios pass.

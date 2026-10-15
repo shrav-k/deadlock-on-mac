@@ -8,3 +8,4 @@ local/
 *.tar.*
 *.exe
 *.dmp
+/native-bin/

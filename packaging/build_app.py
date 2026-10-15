@@ -44,7 +44,9 @@ def build_staged(output, downloads, wine_hotfix=None):
     stage.rmdir()
     manager = resources / "manager"
     manager.mkdir()
-    for name in ("src", "bin", "config", "docs"):
+    subprocess.run([sys.executable, str(REPO / "packaging/build_display_tools.py"),
+                    "--downloads", str(downloads)], check=True)
+    for name in ("src", "bin", "config", "docs", "native", "native-bin"):
         shutil.copytree(REPO / name, manager / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
     for name in ("LICENSE", "README.md", "SECURITY.md", "CHANGELOG.md"):
         shutil.copyfile(REPO / name, manager / name)
@@ -84,7 +86,7 @@ def build_staged(output, downloads, wine_hotfix=None):
               "wine_hotfix": hotfix.specification() if wine_hotfix is not None else None,
               "swift": subprocess.check_output(["/usr/bin/xcrun", "swiftc", "--version"], text=True).strip(),
               "source_files": {str(p.relative_to(REPO)): sha256(p)
-                               for p in sorted([p for d in ("src", "bin", "config", "docs", "packaging")
+                               for p in sorted([p for d in ("src", "bin", "config", "docs", "packaging", "native")
                                                 for p in (REPO / d).rglob("*")]
                                                + [REPO / name for name in ("LICENSE", "README.md", "SECURITY.md", "CHANGELOG.md")])
                                if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"},
@@ -93,6 +95,13 @@ def build_staged(output, downloads, wine_hotfix=None):
     (resources / "build-inputs.json").write_text(json.dumps(inputs, indent=2) + "\n")
     # Sign only this newly built application, never a downloaded game runtime or vendor app.
     subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(output)], check=True)
+    # Deep signing may replace the host helper's ad-hoc signature. Seal its
+    # final bytes in the helper receipt, then reseal only the enclosing bundle.
+    helper_receipt = manager / "native-bin/receipt.json"
+    helpers = json.loads(helper_receipt.read_text())
+    helpers["files"] = {name: sha256(manager / "native-bin" / name) for name in helpers["files"]}
+    helper_receipt.write_text(json.dumps(helpers, indent=2) + "\n")
+    subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", str(output)], check=True)
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(output)], check=True)
     manifest = {str(p.relative_to(output)): sha256(p) for p in sorted(output.rglob("*"))
                 if p.is_file() and not p.is_symlink()}

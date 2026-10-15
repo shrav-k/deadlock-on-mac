@@ -1,5 +1,8 @@
 # Wine and CodeWeavers practices: evidence and implementation decisions
 
+Implementation follow-up: the 0.3.0 manager now includes the named display picker
+and guarded preparation described here. See [current setup and acceptance status](EXTERNAL-DISPLAYS.md).
+
 Reviewed **2026-10-14**. This review uses CodeWeavers support documentation,
 upstream API specifications, the matched local Wine source, and isolated probes.
 It is not an endorsement or a claim of equivalent CrossOver compatibility.

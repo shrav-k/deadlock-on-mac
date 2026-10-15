@@ -64,12 +64,19 @@ the game process's lifetime with **no play-time limit**, then restores the prior
 policy. Choose the tool once in the app; see the installation guide for CLI use,
 recovery and the explicit option to play without it.
 
-The current M2 Max built-in-display baseline is **Retina, 3024×1964 borderless,
+The previously verified M2 Max built-in-display baseline is **Retina, 3024×1964 borderless,
 Direct3D 11, Game Mode On, and game/menu limits of 60 FPS**. The user verified
 screen coverage, pointer alignment, Command–Tab and those settings after a full
 Steam restart. Gameplay performance at this resolution remains unmeasured;
 1920×1200 fullscreen still has coverage/focus failures. See the baseline guide
 before applying display-specific settings.
+
+The 0.3.0 preview adds a **Play on** display picker. Close Windows Steam, click
+**Refresh displays**, select the monitor and **Prepare display**. The manager
+preserves macOS's main display and checks the selection again before Play. A
+changed or disconnected display requires preparation again; it never silently
+chooses a different screen. Use **Test grid** and the game menu to verify scaling
+and input before gameplay. See [display setup and limits](docs/EXTERNAL-DISPLAYS.md).
 
 ## Layout
 

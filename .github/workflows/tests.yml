@@ -28,6 +28,9 @@ jobs:
         run: |
           xcrun swiftc packaging/ManagerLifecycle.swift tests/native/manager_lifecycle_test.swift -o "$RUNNER_TEMP/manager-lifecycle-test"
           "$RUNNER_TEMP/manager-lifecycle-test"
+      - name: Compile pinned display helpers (no Wine or game execution)
+        if: matrix.os == 'macos-14' && matrix.python == '3.13'
+        run: python packaging/build_display_tools.py --output "$RUNNER_TEMP/display-tools" --downloads "$RUNNER_TEMP/downloads"
   app-integration:
     runs-on: macos-15
     steps:

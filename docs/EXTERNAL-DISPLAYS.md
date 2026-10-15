@@ -1,5 +1,59 @@
 # External displays, runtime research and performance plan
 
+## Display picker in 0.3.0
+
+The manager now has **Play on**, **Retina scaling**, **Prepare display**, and
+**Test grid** controls. Keep the laptop as the macOS main display. Close Windows
+Steam, refresh the list, select the named external display and prepare it. The
+current Highball adapter uses borderless mode at the selected monitor's Wine
+size. Automatic Retina policy selects off for a 1× monitor such as this LG and
+on for a Retina monitor; it affects Steam and the entire bottle, not macOS.
+Preparation currently requires the default Steam library and one game video file.
+
+The picker persists a macOS display UUID, not an SDL index. It obtains fresh host
+geometry, runs the installed game's SDL3 in an owned diagnostic, checks all
+monitor bounds including negative origins, and saves the current corresponding
+index. It backs up `video.txt` and the prior Retina value. The diagnostic closes
+normally before the offline settings edit. It never modifies the native primary
+monitor, refresh rate or display arrangement and does not launch a game directly.
+
+Play checks the display fingerprint, runtime/SDL version, Retina policy and saved
+game display fields, then re-reads the live Wine/SDL mapping. When Steam is already
+open this read-only probe leaves its session running; it never sends shutdown. Disconnecting, changing the layout/refresh/resolution or
+having Steam restore different display settings stops Play with a repair message:
+exit Windows Steam, then prepare again. "Prefer external" requires exactly one
+external monitor; it does not guess among several or silently move to the laptop.
+**Let the game manage displays** removes this guard while preserving existing
+resolution and Retina values. CrossOver and other runtime versions remain
+unmanaged until their coordinate adapters are qualified.
+
+The test grid uses the same D3D11/DXMT path without gameplay. It shows a white
+six-pixel border, 100-pixel grid and colored targets centered 80 pixels from each
+corner. Click all four squares, Command–Tab away/back and press Escape. It closes
+automatically after 90 seconds; this diagnostic deadline never limits normal
+Play. Coordinates, buffer size, actual click events and focus transitions are
+saved privately. Geometry is not a substitute for visual/input confirmation.
+
+CLI equivalents (build helpers first when using a source checkout):
+
+```sh
+python3 packaging/build_display_tools.py --downloads ../Downloads
+python3 bin/deadlock-mac display
+python3 bin/deadlock-mac display --prepare DISPLAY_UUID --retina auto
+python3 bin/deadlock-mac display --test-window
+python3 bin/deadlock-mac launch
+```
+
+Local 2026-10-14 test: named LG preparation selected SDL index 1, disabled Retina,
+and configured 2560×1440 borderless while the built-in display stayed primary.
+The grid reported window `(1512,-458)–(4072,982)`, client/buffer 2560×1440, and
+closed with result 0. Its first run received no corner clicks; visual coverage,
+actual pointer alignment, Command–Tab and Deadlock menu coverage are still pending.
+The manager CLI Exit command subsequently closed the Steam-launched game normally
+and the watcher restored Game Mode to its previous `auto` policy.
+No gameplay or performance qualification is implied.
+
+
 Research checked **2026-10-14**. Recommendations below are experiments, not measured
 FPS gains. Use [COMPATIBILITY.md](COMPATIBILITY.md) for actual local results and
 [QUALITY.md](QUALITY.md) for promotion gates. Steam remains responsible for the

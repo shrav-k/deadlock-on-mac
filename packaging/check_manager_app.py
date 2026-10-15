@@ -55,6 +55,12 @@ def main():
             if result.returncode or f'PASS {scenario}' not in result.stdout:
                 raise SystemExit(f'{scenario} failed ({result.returncode})\n{result.stdout}\n{result.stderr}')
             print(result.stdout.strip())
+        display_test = root / 'DisplayModelTests'
+        subprocess.run(['/usr/bin/xcrun', 'swiftc', '-parse-as-library', '-D', 'MANAGER_APP_TESTS',
+                        str(REPO / 'packaging/ManagerLifecycle.swift'),
+                        str(REPO / 'packaging/DeadlockManager.swift'),
+                        str(REPO / 'tests/native/display_model_test.swift'), '-o', str(display_test)], check=True)
+        subprocess.run([str(display_test)], check=True, timeout=10)
 
 
 if __name__ == '__main__':
