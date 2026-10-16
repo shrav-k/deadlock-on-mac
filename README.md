@@ -87,14 +87,18 @@ is still under validation. See [display setup and limits](docs/EXTERNAL-DISPLAYS
 Projects/Games/Deadlock/
   deadlock-on-mac/    source, tests and documentation only
   Downloads/          verified runtime and Steam installers
-  Runtimes/           side-by-side runtime versions
+  Runtimes/           active engines, paired renderers, support and hotfixes
   Bottles/            one Windows Steam environment per profile
-  DeadlockData/       private profiles and logs
+  DeadlockData/       private profiles, logs and retained research evidence
   DeadlockBackups/    local Deadlock data snapshots
-  Tools/              optional diagnostic compiler
+  Tools/              configured Apple Game Mode tool; temporary developer builds
   Builds/             one current app, one Previous rollback, small build history
-  deadlock-audit-*/   local audit evidence (not published)
 ```
+
+See [workspace ownership and cleanup](docs/WORKSPACE.md) for what must stay, what
+can be regenerated, and how to keep future experiments from accumulating here.
+This is a development workspace, not the directory tree a player must download.
+The app installs its runtime components separately; it never ships this workspace.
 
 No administrator privileges, native Steam modifications, trial resets, automatic
 Cloud-conflict choices, or global process kills. Wine is not a security sandbox.
@@ -115,6 +119,7 @@ python3 bin/deadlock-mac runtime-dependencies
 - [External displays, hotdesking and performance research](docs/EXTERNAL-DISPLAYS.md)
 - [Wine/CodeWeavers practices and secondary-display investigation](docs/WINE-PRACTICES.md)
 - [Module boundaries, packaging plan and release gates](docs/ARCHITECTURE.md)
+- [Deployment readiness and future game recipes](docs/ARCHITECTURE.md#deployment-readiness--2026-10-16)
 - [Tests, gameplay acceptance and performance comparisons](docs/TESTING.md)
 - [Observed compatibility](docs/COMPATIBILITY.md)
 - [Security and provenance limitations](SECURITY.md)

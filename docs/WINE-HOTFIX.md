@@ -71,9 +71,11 @@ Game Mode restoration, and relaunch. The original Wine files remain intact; a
 verified process-local DLL search overlay supplies the hotfix. Steam must restart
 because games inherit its environment. Hashes are checked before launches.
 
-The manager's **Exit Deadlock** button / `exit` command requests normal `WM_CLOSE`
-via Wine's `taskkill` without `/F`, waits for actual process exit, then checks Game
-Mode restoration. It leaves Steam open for synchronization. A timeout is a failure,
+The manager's **Exit Deadlock** button / `exit` command asks the running Steam
+client to stop app 1422450 through its non-forced `+app_stop 1422450 0` command,
+waits for actual process exit, then checks Game Mode restoration. It leaves Steam
+open for synchronization. The earlier Wine `taskkill`/`WM_CLOSE` path did not
+reliably close the game and is not the current exit implementation. A timeout is a failure,
 not permission to kill the game. Forced recovery remains an explicit operator
 choice; it is not a passing exit test.
 

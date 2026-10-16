@@ -2,6 +2,8 @@
 
 ## 0.4.1 — development
 
+- Define workspace ownership/cleanup and record deployment gaps; outline a shared
+  launcher core with versioned game recipes without claiming general-game support.
 - Publish local previews at one stable app path with opt-in verified replacement,
   one rollback app and bounded provenance history. Reject active manager/watchers
   and changed app trees; test build failure, publication rollback and recovery.
