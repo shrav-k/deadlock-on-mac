@@ -1,5 +1,8 @@
 # Runtime qualification and performance protocol
 
+For the current authorized execution sequence and stop/recovery conditions, see
+[autonomous qualification and optimization](AUTONOMOUS-TESTING.md).
+
 The objective is a maintained Deadlock distribution with reusable runtime,
 installation, lifecycle and measurement components. Other Windows games are a
 future compatibility target; they are not supported merely because Steam opens.

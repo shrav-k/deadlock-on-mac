@@ -1,5 +1,6 @@
 """Request normal game shutdown, then verify actual exit and policy restoration."""
 import os
+from pathlib import Path
 import subprocess
 import time
 
@@ -41,6 +42,28 @@ def wait_for_exit(processes, timeout):
             return False
         time.sleep(0.5)
     return True
+
+
+def wait_for_wine_shutdown(profile, timeout=20):
+    """Wait for this prefix's server grace period; never stop another bottle.
+
+    Steam's client can disappear before wineserver finishes. A subsequent display
+    probe otherwise mistakes that retiring server for an unrelated live session.
+    --wait observes shutdown; it neither starts Steam nor kills the server.
+    """
+    if profile['provider'] != 'wine':
+        return  # CrossOver owns its bottle lifecycle; do not guess its server path.
+    try:
+        result = subprocess.run([str(Path(profile['runtime']) / 'bin/wineserver'), '--wait'],
+                                env=environment(profile), cwd=profile['prefix'],
+                                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise ManagerError('Windows Steam closed, but Wine is still finishing shutdown. '
+                           'Wait or close other apps in this bottle, then retry. No process was force-killed.') from exc
+    if result.returncode:
+        raise ManagerError('Windows Steam closed, but Wine server shutdown could not be verified. '
+                           'Inspect this profile before restarting.')
 
 
 def close(workspace, profile, log, timeout=30, report=print):
@@ -89,5 +112,8 @@ def close_steam(workspace, profile, log, timeout=60, report=print):
             report(f"Still waiting for Windows Steam ({max(0, deadline - time.monotonic()):.0f}s left). Check Steam for prompts; Quit Manager will wait for this step.")
             next_report = time.monotonic() + 5
         time.sleep(0.5)
+    if profile['provider'] == 'wine':
+        report('Steam clients are closed. Waiting for this profile\'s Wine session to finish…')
+    wait_for_wine_shutdown(profile)
     message = "Windows Steam and its helpers exited. " if clients else "Windows Steam and its helpers are closed. "
     return message + finish_session(workspace, profile["id"])

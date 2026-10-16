@@ -16,13 +16,22 @@ is available yet.
 
 Game Mode during Play is enabled by default and requires a compatible Apple-signed
 `gamepolicyctl`. Setup discovers, validates and prepares it automatically. On a
-fresh Mac without a compatible copy, install/update Xcode from Apple and retry
+fresh Mac without a compatible copy, install/update Xcode from Apple, open it once
+to complete Apple's license and first-run setup, then retry
 **Check Game Mode Setup**; no file picker or `xcode-select` change is required. To
 play without that tool, turn off **Enable during Play** or use the CLI's
 `bootstrap --without-game-mode` and `launch --without-game-mode`. The packaged app
 can install and play without Xcode when this preference is explicitly off. On an existing
 working installation, skip setup/download and use Open Steam → Play. Do not
 bootstrap a running Wine environment.
+
+Command Line Tools alone do not supply the required tool in the inspected 26.6
+package. Keep compatible Xcode as the current default setup prerequisite; optional
+non-macOS platforms and simulator runtimes are unnecessary for Game Mode setup.
+Xcode **27.1 (27A9275)** on macOS **26.6.2 (25G83)** passed fresh packaged
+dependency setup in an empty workspace on 2026-10-16, without an existing tool/cache.
+Other Xcode/macOS pairs require the same check. See the [Game Mode setup decision](GAME-MODE-SETUP.md)
+for evidence, the public native alternative and the remaining release gates.
 
 ## Source installation
 
@@ -174,9 +183,11 @@ display and actual gameplay acceptance remain separate pending runs.
 
 ## Automatic Game Mode during Play
 
-First try Apple's native flow: while the game is in supported macOS fullscreen,
-open Game Overlay with Command–Esc and enable Game Mode in its settings. In our
-Wine test the overlay was unavailable, so we used Apple's developer tool instead.
+Apple's native flow uses an eligible game in macOS fullscreen and needs no player
+Xcode installation. In our Wine test the overlay was unavailable, so the manager
+currently uses Apple's developer tool instead. Adding game metadata to the manager
+alone does not transfer eligibility to the Steam/Wine child. Native integration
+remains unqualified; see the [research and installation policy](GAME-MODE-SETUP.md).
 
 Use a `gamepolicyctl` from a compatible Apple developer-tool installation. A full
 Xcode installation is only relevant to obtaining that tool; it is not a

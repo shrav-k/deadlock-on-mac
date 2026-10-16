@@ -17,6 +17,13 @@ installs a game or downloads runtime binaries.
 
 ## Native graphics probe
 
+`tests/native/display_caps_probe.c` is an additional read-only Win32/GDI metrics
+probe for investigating Retina discrepancies. Compile it with the pinned
+LLVM-MinGW compiler using `-Wall -Wextra -Werror -O2 -luser32 -lgdi32`. Run with
+the full profile environment and Steam closed; compare both scaling policies
+with native host inventory. It creates no window and changes no display mode.
+See [the upstream research and local result](GITHUB-RESEARCH.md#retina-metrics-and-fullscreen).
+
 `tests/native/d3d11_probe.c` creates a window, hardware D3D11 device, render target
 and swapchain, then clears and presents 120 frames. It has no Steam dependency.
 Compile with an existing Windows cross-compiler; for example:

@@ -120,6 +120,8 @@ python3 bin/deadlock-mac runtime-dependencies
 ```
 
 - [Runtime research, alternatives and upgrades](docs/RUNTIMES.md)
+- [GitHub project review and reusable engineering findings](docs/GITHUB-RESEARCH.md)
+- [Autonomous qualification and optimization plan](docs/AUTONOMOUS-TESTING.md)
 - [Matching FFmpeg libraries, packaging and automated media probes](docs/MEDIA-RUNTIME.md)
 - [External displays, hotdesking and performance research](docs/EXTERNAL-DISPLAYS.md)
 - [Wine/CodeWeavers practices and secondary-display investigation](docs/WINE-PRACTICES.md)

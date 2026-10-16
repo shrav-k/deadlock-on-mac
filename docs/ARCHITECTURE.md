@@ -91,6 +91,9 @@ receipt; recovery/re-adoption is explicit or happens on next Play. SIGKILL/power
 loss cannot guarantee immediate cleanup. Native Wine app identity/fullscreen
 integration and a supported Apple-tool distribution route remain future work;
 this lifecycle feature does not establish native per-game eligibility.
+The [Game Mode setup decision](GAME-MODE-SETUP.md) distinguishes Apple's public
+native activation path from this private-framework-backed developer-tool override
+and records the clean-install qualification required for its Xcode prerequisite.
 
 ## Release gates
 

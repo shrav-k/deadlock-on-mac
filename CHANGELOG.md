@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.3 — development
+
+- Wait for the selected Wine server to finish after Windows Steam exits, so
+  immediate relaunch/display checks do not reject its normal shutdown grace period
+  as another active Wine session. Timeout is explicit; no force termination.
+- Qualify fresh Game Mode preparation from official Xcode 27.1 on macOS 26.6.2
+  using the packaged interpreter in an empty workspace. Add strict provenance,
+  first-run, missing-tool, cache and policy-preservation regression checks.
+- Document installation prerequisites and an ordered autonomous qualification
+  plan for both displays, lifecycle, controlled sandbox and performance work.
+- Consolidate pinned GitHub project research and add a read-only Windows display
+  API probe. The local probe does not reproduce the upstream extra GDI doubling.
+
 ## 0.4.2 — development
 
 - Package pinned FFmpeg libraries matching Highball's ABI and re-export bindings;

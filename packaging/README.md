@@ -112,6 +112,32 @@ advanced override; no file picker or global `xcode-select` change is required. T
 collapsed diagnostic section retains the timed test and its recovery controls.
 See the complete [installation and Game Mode guide](../docs/INSTALL.md).
 
+### Qualify a fresh Xcode prerequisite
+
+After installing compatible Xcode from Apple, run the packaged dependency check:
+
+```sh
+python3 packaging/check_onboarding.py \
+  --app '../Builds/Deadlock Manager.app' \
+  --require-xcode /Applications/Xcode.app \
+  --report ../DeadlockData/qualification/fresh-xcode.json
+```
+
+This uses the app's isolated Python and shipped modules in a temporary empty
+workspace. It verifies Apple's Xcode signature and completed first-run setup,
+then requires automatic discovery from the specified Xcode bundle,
+records its version/build and tool digest, verifies repeat preparation and checks
+that system policy stays unchanged. A missing/incompatible tool is a failure in
+this mode. A legacy tool, existing cache or `--apple-tool` fixture cannot satisfy
+the check. The temporary media/tool installation is removed afterward. Steam,
+Wine and the game are not started; this is setup qualification, not gameplay or
+proof of Game Mode activation during a game.
+
+Without `--require-xcode`, the check can report a missing prerequisite as an
+expected diagnostic. Such a result is not fresh-Xcode qualification. The optional
+`--apple-tool` mode tests a supplied fixture and is mutually exclusive with the
+strict Xcode mode. Regression tests exercise both modes and failure cases on CI.
+
 The bundled Python interpreter runs with `-I -B`, an explicit manager import path,
 an allowlisted environment and its included CA store. The app does not depend on
 the player's Homebrew, Git, pip, compiler or separately installed Python.

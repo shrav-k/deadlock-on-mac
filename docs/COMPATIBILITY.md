@@ -1,6 +1,8 @@
 # Compatibility ledger
 
-Keep observed results distinct from upstream claims. Last updated 2026-10-14.
+Keep observed results distinct from upstream claims. Last updated 2026-10-16.
+The dated entries below preserve historical results and failures; later entries
+describe fixes and current qualification limits.
 
 | Configuration | Installation | Steam account | Deadlock rendering | Multiplayer / Cloud |
 | --- | --- | --- | --- | --- |
@@ -431,3 +433,61 @@ click alignment, Command–Tab and Stop Grid worked. The macOS menu bar remained
 visible while the pointer was centered. Worker/helper/server processes ended,
 but no completed log was saved; do not attribute old 0.3.0 events to this run.
 Game-menu acceptance on the LG remains pending.
+
+
+## Xcode qualification and 0.4.3 lifecycle candidate — 2026-10-16
+
+Official Xcode 27.1 (27A9275) completed first-run setup on macOS 26.6.2. Fresh
+packaged dependency preparation passed without an existing tool cache or manual
+override; the bundled FFmpeg installation also passed. See
+[Game Mode setup](GAME-MODE-SETUP.md) for the exact scope and private-API limit.
+The suite has 192 passing Python tests; 13 native AppKit lifecycle scenarios and
+the display/activation policy checks passed using the new compiler.
+
+The first live lifecycle run found a normal-shutdown race: Steam processes had
+exited but Wine's server remained during its persistence grace period. The next
+display check correctly refused that still-active session. Version 0.4.3 waits
+for the selected prefix's server to finish using `wineserver --wait`, with a
+bounded timeout and no forced termination. Three consecutive source-CLI cycles
+then launched Deadlock, closed only the game, restored `auto`, and closed Steam
+and Wine. Game Exit took 3.21, 3.66 and 3.24 seconds. Steam updated the game to
+build 25997478. These are process/lifecycle results, not visible-menu or gameplay
+acceptance. Private receipt: `DeadlockData/lifecycle-checks/20261016T222920728796Z/report.json`.
+
+The built-in and LG inventories agreed across Windows monitor, display-mode and
+GDI APIs with Retina both off and on. No additional GDI doubling was observed;
+the global Retina policy still doubles the 1× external display when enabled.
+See [the upstream review and probe result](GITHUB-RESEARCH.md). This does not
+resolve the remaining fullscreen/pointer/focus acceptance work.
+
+The rebuilt manager's actual Quit button closed its process. Its actual Play
+button sent the Steam launch request, but the first built-in/Retina-On run did
+not produce a Deadlock process: Steam logged a fatal stalled cross-thread pipe.
+The watcher timed out and restored `auto`. A retry logged a stalled Steam main
+loop; the test was cancelled and policy restoration verified. The manager's
+“Play request sent” status acknowledges dispatch only; it does not show later
+watcher failure. Startup status reporting and this cold-start failure remain
+open. Do not label 0.4.3 fully qualified from the earlier CLI passes.
+
+A subsequent packaged-CLI run with the manager closed and the same built-in
+Retina configuration also failed to start the game. This rules out the manager
+UI as a necessary trigger; it does not isolate Retina as the cause. Policy
+restored to `auto`, and Steam/helpers exited without force termination. Private
+receipt: `DeadlockData/lifecycle-checks/20261016T224402327160Z/report.json`.
+
+The computer-control service also crashed while inspecting the manager's
+Settings view (`SkyComputerUseService`, an array-removal assertion), and its app
+inventory did not expose the Wine windows. These are separate automation limits,
+not proof of a locked Mac or of successful visual output. No current-session
+sandbox/performance result is claimed. The remaining gates are in
+[AUTONOMOUS-TESTING.md](AUTONOMOUS-TESTING.md).
+
+The final packaged 0.4.3 CLI comparison with LG selected and Retina Off passed:
+Deadlock started through Steam, normal game exit restored `auto`, and Steam plus
+Wine finished shutdown. Private receipt:
+`DeadlockData/lifecycle-checks/20261016T224804332197Z/report.json`. This is a
+lifecycle pass only. It narrows the observed configuration difference but does
+not prove Retina caused the earlier startup failures. The LG remains prepared
+at 2560×1440; the built-in display remains macOS primary. All test game/Steam
+processes ended, no restoration is pending, and the temporary keep-awake
+assertion was released. No permanent lock/password setting changed.

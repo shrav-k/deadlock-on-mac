@@ -22,6 +22,8 @@ class ExitTests(unittest.TestCase):
         self.steam.touch()
         self.receipt = {"workspace": str(self.root), "profile": "highball", "original_policy": "auto",
                         "restore_pending": False, "final_status": {"policy": "auto"}}
+        self.wine_shutdown = patch.object(game_exit, 'wait_for_wine_shutdown').start()
+        self.addCleanup(patch.stopall)
 
     def closing(self, *, games=None, identities=None, result=None):
         stack = ExitStack()
@@ -126,15 +128,18 @@ class ExitTests(unittest.TestCase):
             self.assertEqual(calls, ['game restored'])
             calls.append('steam shutdown')
             return Mock(returncode=0)
+        self.wine_shutdown.side_effect = lambda profile: calls.append('wine finished')
         with patch.object(game_exit, 'close', side_effect=close), patch.object(game_exit, 'send', side_effect=send), patch.object(game_exit, 'steam_control_command', return_value=['steam', '-shutdown']), patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', side_effect=[{30: 'steam'}, {}, {31: 'helper'}, {}, {}, {}, {}]) as inspect, patch.object(game_exit, 'finish_session', return_value='restored'), patch.object(game_exit.time, 'sleep') as sleep:
             self.assertIn('helpers exited', game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', report=Mock()))
         sleep.assert_called_once()
+        self.assertEqual(calls, ['game restored', 'steam shutdown', 'wine finished'])
         self.assertTrue(all(call.args[0] == self.profile['prefix'] for call in inspect.call_args_list))
 
     def test_failed_game_close_prevents_steam_shutdown(self):
         with patch.object(game_exit, 'close', side_effect=ManagerError('game busy')), patch.object(game_exit, 'send') as send, self.assertRaisesRegex(ManagerError, 'game busy'):
             game_exit.close_steam(self.root, self.profile, self.root / 'steam.log')
         send.assert_not_called()
+        self.wine_shutdown.assert_not_called()
 
     def test_steam_helper_without_client_is_not_reported_as_closed(self):
         def inspect(prefix, name):
@@ -167,3 +172,43 @@ class ExitTests(unittest.TestCase):
         with patch('deadlock_mac.cli.load_profile', return_value=self.profile), patch.object(game_exit, 'close_steam', return_value='closed') as close, redirect_stdout(StringIO()):
             self.assertEqual(main(['--workspace', str(self.root), 'steam-exit']), 0)
         self.assertEqual(close.call_args.args[:2], (self.root, self.profile))
+
+    def test_incomplete_wine_shutdown_is_not_reported_as_success(self):
+        self.wine_shutdown.side_effect = ManagerError('Wine still finishing')
+        with patch.object(game_exit, 'close', return_value='closed'), \
+             patch.object(game_session, 'games_in_prefix', return_value={}), \
+             patch.object(game_session, 'processes_in_prefix', return_value={}), \
+             patch.object(game_exit, 'finish_session') as finish, \
+             self.assertRaisesRegex(ManagerError, 'Wine still finishing'):
+            game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', report=Mock())
+        finish.assert_not_called()
+
+
+class WineShutdownTests(unittest.TestCase):
+    def setUp(self):
+        self.profile = {'provider': 'wine', 'runtime': '/runtime with spaces', 'prefix': '/our bottle'}
+
+    def test_wait_is_scoped_and_observes_server_without_kill_or_restart(self):
+        env = {'WINEPREFIX': '/our bottle', 'PATH': '/usr/bin:/bin'}
+        with patch.object(game_exit, 'environment', return_value=env), \
+             patch.object(game_exit.subprocess, 'run', return_value=Mock(returncode=0)) as run:
+            game_exit.wait_for_wine_shutdown(self.profile)
+        self.assertEqual(run.call_args.args[0], ['/runtime with spaces/bin/wineserver', '--wait'])
+        self.assertEqual(run.call_args.kwargs['env'], env)
+        self.assertEqual(run.call_args.kwargs['cwd'], '/our bottle')
+        self.assertEqual(run.call_args.kwargs['timeout'], 20)
+
+    def test_timeout_and_error_fail_without_force_termination(self):
+        for result in (subprocess.TimeoutExpired('wineserver', 20), Mock(returncode=1)):
+            with self.subTest(result=result), \
+                 patch.object(game_exit, 'environment', return_value={}), \
+                 patch.object(game_exit.subprocess, 'run', side_effect=[result]) as run, \
+                 patch.object(game_exit.os, 'kill') as kill, self.assertRaises(ManagerError):
+                game_exit.wait_for_wine_shutdown(self.profile)
+            self.assertEqual(run.call_count, 1)
+            kill.assert_not_called()
+
+    def test_crossover_is_not_treated_as_a_free_wine_runtime(self):
+        with patch.object(game_exit, 'environment') as environment, patch.object(game_exit.subprocess, 'run') as run:
+            game_exit.wait_for_wine_shutdown({'provider': 'crossover'})
+        environment.assert_not_called(); run.assert_not_called()

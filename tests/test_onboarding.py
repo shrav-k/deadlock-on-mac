@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -22,6 +23,24 @@ class OnboardingTests(unittest.TestCase):
                 patch.object(game_mode, 'AppleTool', side_effect=[failing, working]):
             self.assertIs(game_mode.select_tool(self.root), working)
         failing.set.assert_not_called(); working.set.assert_not_called()
+
+    def test_empty_workspace_uses_selected_xcode_without_inherited_tool_overrides(self):
+        source = self.root / 'Xcode.app/Contents/Developer/usr/bin/gamepolicyctl'
+        source.parent.mkdir(parents=True); source.write_bytes(b'Apple fixture')
+        with patch.dict(os.environ, {'PATH': '/untrusted/bin', 'DEVELOPER_DIR': '/old/Xcode.app'}), \
+                patch.object(game_mode.subprocess, 'run', return_value=Mock(returncode=0, stdout=str(source) + '\n')) as run, \
+                patch.object(Path, 'glob', return_value=[]):
+            self.assertEqual(list(game_mode.tool_candidates(self.root)), [source])
+        self.assertEqual(run.call_args.args[0], ['/usr/bin/xcrun', '--find', 'gamepolicyctl'])
+        self.assertEqual(run.call_args.kwargs['env']['PATH'], '/usr/bin:/bin:/usr/sbin:/sbin')
+        self.assertNotIn('DEVELOPER_DIR', run.call_args.kwargs['env'])
+
+    def test_application_discovery_works_when_command_line_tools_are_selected(self):
+        source = self.root / 'Xcode.app/Contents/Developer/usr/bin/gamepolicyctl'
+        source.parent.mkdir(parents=True); source.write_bytes(b'Apple fixture')
+        with patch.object(game_mode.subprocess, 'run', return_value=Mock(returncode=1)), \
+                patch.object(Path, 'glob', side_effect=[[source], []]):
+            self.assertEqual(list(game_mode.tool_candidates(self.root)), [source])
 
     def test_no_tool_has_actionable_setup_error_and_no_policy_change(self):
         with patch.object(game_mode, 'tool_candidates', return_value=[]), \
