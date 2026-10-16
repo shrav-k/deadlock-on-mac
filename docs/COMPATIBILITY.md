@@ -491,3 +491,40 @@ not prove Retina caused the earlier startup failures. The LG remains prepared
 at 2560×1440; the built-in display remains macOS primary. All test game/Steam
 processes ended, no restoration is pending, and the temporary keep-awake
 assertion was released. No permanent lock/password setting changed.
+
+## 0.4.4 startup and shutdown investigation — 2026-10-16
+
+Built-in Retina On subsequently started through source CLI, packaged CLI and the
+actual manager Play button. The earlier Steam main-loop stall is intermittent;
+Retina has not been isolated as its cause and no engine fix is claimed.
+See [the investigation and per-run evidence](STARTUP-INVESTIGATION.md).
+
+The manager now shows the detached watcher's startup/result and restoration on
+the Play page. A current launch-log tail supplies a more specific error only
+after startup times out; a recoverable warning cannot abort a running game.
+Shutdown checks now include the 64-bit Steam overlay and briefly recheck a helper
+whose cwd disappears during exit. Persistent ownership ambiguity remains an error.
+Orphan overlay cleanup, when needed after all owners exit, is reported separately
+from normal shutdown and never targets the game, client or whole Wine server.
+
+207 Python tests and the native AppKit/display/activation/status-reader checks
+pass. Sixteen synthetic view snapshots cover two widths and light/dark modes;
+review exposed and corrected clipped display-help text. Packaged fresh FFmpeg and
+Xcode Game Mode preparation pass without a pre-existing tool cache. Two LG cycles
+and two subsequent built-in Retina cycles pass startup, normal game/Steam/Wine
+exit and exact restoration; all four overlays exited normally. These are lifecycle
+results, not visual or gameplay acceptance, and do not exercise automatic orphan
+recovery. The actual Play page displayed the new running-process status.
+
+The computer-use service still fails when inspecting Settings/Diagnostics and
+does not expose Wine windows. Steam/game screenshots, pointer/focus checks and
+private-sandbox performance remain blocked by that UI access. No blind gameplay,
+public matches, new renderer or speculative Retina patch was used. The remaining
+autonomous/replay/visual test flow is in [the qualification plan](AUTONOMOUS-TESTING.md).
+
+A subsequent actual 0.4.4 Play-button test on LG/Retina Off reproduced the startup
+timeout. The new failure label and policy restoration were visibly verified;
+Exit Windows Steam and Quit Manager completed. A silent-launch candidate also
+failed. Both Steam engine thread samples point into Core Audio device setup,
+which is now the next investigation; Retina On is not a required trigger. The
+earlier passing cycles remain valid lifecycle observations, not a hang fix.

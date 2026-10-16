@@ -72,6 +72,32 @@ class GameSessionTests(unittest.TestCase):
         ready.assert_not_called()
         self.assertEqual(tool.policy, 'auto')
 
+    def test_timeout_uses_only_this_launch_log_and_restores_policy(self):
+        tool = Tool('off')
+        log = self.root / 'launch.log'
+        log.write_text('fatal stalled cross-thread pipe')
+        with patch.object(game_mode, 'process_identity', return_value='watcher'), \
+                patch.object(game_session, 'games_in_prefix', return_value={}), \
+                patch.object(game_session.signal, 'signal'), \
+                patch.object(game_session.time, 'monotonic', side_effect=[0, 200]), \
+                self.assertRaisesRegex(ManagerError, 'Steam reported a stalled main loop'):
+            game_session.session(tool, self.profile, self.root, self.receipt, Mock(), Mock(), startup_log=log)
+        state = json.loads(self.receipt.read_text())
+        self.assertEqual(state['launch_log'], str(log))
+        self.assertFalse(state['restore_pending'])
+        self.assertEqual(tool.policy, 'off')
+
+    def test_a_recovered_steam_warning_does_not_abort_a_running_game(self):
+        log = self.root / 'launch.log'
+        log.write_text('CSteamEngine::BMainLoop appears to have stalled')
+        tool = Tool()
+        with patch.object(game_mode, 'process_identity', side_effect=['watcher', '']), \
+                patch.object(game_session, 'games_in_prefix', return_value={42: self.identity}), \
+                patch.object(game_session.signal, 'signal'):
+            game_session.session(tool, self.profile, self.root, self.receipt, Mock(), Mock(), startup_log=log)
+        self.assertNotIn('error', json.loads(self.receipt.read_text()))
+        self.assertEqual(tool.policy, 'auto')
+
     def test_failed_enable_after_mutation_restores(self):
         tool = Tool('off')
         change = tool.set
@@ -199,8 +225,34 @@ class GameSessionTests(unittest.TestCase):
             self.assertEqual(game_session.processes_in_prefix(self.profile['prefix'], 'steam.exe', [42]), {})
 
     def test_prefix_inspection_failure_does_not_assume_process_is_safe(self):
-        with patch.object(game_session.subprocess, 'run', return_value=Mock(returncode=1)), \
+        with patch.object(game_session.subprocess, 'run', return_value=Mock(returncode=1)) as run, \
                 patch.object(game_mode, 'process_identity', return_value='alive /Steam/steam.exe'), \
+                patch.object(game_session.time, 'sleep') as sleep, \
+                self.assertRaisesRegex(ManagerError, 'Could not identify'):
+            game_session.processes_in_prefix(self.profile['prefix'], 'steam.exe', [42])
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_helper_losing_cwd_before_exit_is_rechecked_without_false_failure(self):
+        with patch.object(game_session.subprocess, 'run', return_value=Mock(returncode=1)) as run, \
+                patch.object(game_mode, 'process_identity', side_effect=['alive /Steam/steamwebhelper.exe'] * 2 + ['']), \
+                patch.object(game_session.time, 'sleep') as sleep:
+            self.assertEqual(game_session.processes_in_prefix(self.profile['prefix'], 'steamwebhelper.exe', [42]), {})
+        self.assertEqual(run.call_count, 2)
+        sleep.assert_called_once_with(0.1)
+
+    def test_transient_cwd_failure_still_identifies_the_live_owned_process(self):
+        results = [Mock(returncode=1), Mock(returncode=0, stdout='n' + self.profile['prefix'] + '\n')]
+        identity = 'alive /Steam/steamwebhelper.exe'
+        with patch.object(game_session.subprocess, 'run', side_effect=results), \
+                patch.object(game_mode, 'process_identity', return_value=identity), \
+                patch.object(game_session.time, 'sleep'):
+            self.assertEqual(game_session.processes_in_prefix(self.profile['prefix'], 'steamwebhelper.exe', [42]), {42: identity})
+
+    def test_success_without_cwd_cannot_hide_a_live_process(self):
+        with patch.object(game_session.subprocess, 'run', return_value=Mock(returncode=0, stdout='p42\n')), \
+                patch.object(game_mode, 'process_identity', return_value='alive /Steam/steam.exe'), \
+                patch.object(game_session.time, 'sleep'), \
                 self.assertRaisesRegex(ManagerError, 'Could not identify'):
             game_session.processes_in_prefix(self.profile['prefix'], 'steam.exe', [42])
 

@@ -2,7 +2,8 @@
 """Opt-in live MENU-ONLY launch/exit check. Never enters gameplay or sends input.
 
 Uses an already installed, signed-in profile. Never downloads a second game,
-changes settings, force-kills processes, or automates Steam account prompts.
+changes settings or automates Steam account prompts. Reports the manager's
+scoped orphan-overlay recovery separately from normal helper shutdown.
 """
 import argparse
 from datetime import datetime, timezone
@@ -85,6 +86,7 @@ def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=N
                 print('Requesting normal Steam shutdown…', flush=True)
                 started = time.monotonic()
                 cycle['steam_exit_result'] = command('steam-exit')
+                cycle['overlay_recovery'] = 'required SIGTERM recovery' in cycle['steam_exit_result']
                 cycle['steam_exit_seconds'] = round(time.monotonic() - started, 2)
                 if tool.status()['policy'] != original:
                     raise ManagerError('Game Mode policy changed during a Steam-only check.')
@@ -92,18 +94,28 @@ def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=N
                 cycle['passed'] = True
                 atomic_json(folder / 'report.json', result)
                 continue
+            launch_started = time.monotonic()
             command('launch', '--game-mode-tool', str(tool_path))
+            print('Launch dispatched; waiting for a Deadlock process (not a visual pass)…', flush=True)
             deadline = time.monotonic() + 180
+            next_progress = time.monotonic() + 15
             while not game_session.games_in_prefix(profile['prefix']):
                 state = game_session.status()
                 if state.get('phase') == 'finished' or time.monotonic() >= deadline:
                     raise ManagerError('The game did not stay running after launch.')
+                if time.monotonic() >= next_progress:
+                    print(f'Still waiting for startup; watcher phase={state.get("phase", "unknown")}, '
+                          f'{time.monotonic() - launch_started:.0f}s elapsed.', flush=True)
+                    next_progress = time.monotonic() + 15
                 time.sleep(1)
+            cycle['launch_seconds'] = round(time.monotonic() - launch_started, 2)
+            print(f'Game process appeared after {cycle["launch_seconds"]}s; settling {settle_seconds}s.', flush=True)
             time.sleep(settle_seconds)
             games = game_session.games_in_prefix(profile['prefix'])
             if len(games) != 1 or tool.status()['policy'] != 'on':
                 raise ManagerError('Expected one running game and Game Mode On before Exit.')
             cycle['game_pid'] = next(iter(games))
+            print('Requesting normal game exit and checking Game Mode restoration…', flush=True)
             started = time.monotonic()
             cycle['exit_result'] = command('exit')
             cycle['exit_seconds'] = round(time.monotonic() - started, 2)
@@ -114,11 +126,16 @@ def check(workspace, profile_id, tool_path, cycles, settle_seconds=15, manager=N
                 raise ManagerError('Game Exit unexpectedly closed Windows Steam.')
             command('exit')  # Idempotence: must not start another game/client.
             # Cold Steam startup on the next cycle; verify both shutdown and no-op.
+            print('Game closed and policy restored; requesting Steam/Wine shutdown…', flush=True)
             cycle['steam_exit_result'] = command('steam-exit')
+            cycle['overlay_recovery'] = 'required SIGTERM recovery' in cycle['steam_exit_result']
             command('steam-exit')
             cycle['passed'] = True
+            print(f'Cycle {index + 1} passed closure checks; game and Steam/Wine are closed. '
+                  f'Overlay recovery: {cycle["overlay_recovery"]}.', flush=True)
             atomic_json(folder / 'report.json', result)
         result['passed'] = True
+        result['all_overlays_exited_normally'] = not any(cycle.get('overlay_recovery') for cycle in result['cycles'])
     except (ManagerError, OSError, subprocess.SubprocessError) as exc:
         result['error'] = str(exc)
         # Attempt normal closure only. Preserve the original failure and recovery state.

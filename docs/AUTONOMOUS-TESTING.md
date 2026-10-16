@@ -112,3 +112,52 @@ Related protocols: [quality gates](QUALITY.md), [performance](PERFORMANCE.md),
 [external displays](EXTERNAL-DISPLAYS.md), [Wine practices](WINE-PRACTICES.md).
 The [GitHub project review](GITHUB-RESEARCH.md) records pinned upstream leads,
 license boundaries and the next experiments, rather than treating recipes as proof.
+
+## UI images and repeatable workloads
+
+Run `python3 packaging/check_manager_snapshots.py --output <new-private-folder>`
+for 16 synthetic manager views: waiting/failure Play, Settings and Diagnostics,
+two content widths and light/dark appearances. This renders our own views offscreen;
+it does not capture the desktop or start Wine. Retain the manifest and source
+revision, review PNGs for clipping/contrast, and compare only equivalent OS/font/
+scale fixtures. A successful render is not an approved visual baseline. Actual
+sidebar navigation, scrolling, focus and buttons still need the native app checks
+and a computer-use walkthrough.
+
+For Steam/game screenshot checks, capture through an available, observed UI
+surface. Keep account/friends content private. Record display ID, backing pixels,
+game build, presentation mode, scene, sample time and pass/fail/block reason.
+Check window bounds and known menu/HUD anchors; mask changing clocks, player
+names and animations before a reviewed image comparison. Pixel equality across
+different monitors or game builds is not an acceptance criterion. If the tool
+cannot address the Wine window, mark that gate blocked instead of replacing it
+with a process check or unobserved clicks.
+
+For autonomous performance work, use three distinct workloads:
+
+1. **Startup/menu:** cold/warm launch time, process-specific rendering samples,
+   normal exit, exact Game Mode restoration and complete Steam/Wine shutdown.
+   This is the currently runnable lifecycle lane; menu metrics are not gameplay.
+2. **Private sandbox:** observed navigation, known hero/ability, fixed camera and
+   timed idle/effect/movement markers; run warmed A/B and B/A repetitions. Stop
+   on loss of observable focus, a dialog, scene mismatch or thermal pressure.
+3. **Local replay candidate:** a user-owned, build-compatible demo and fixed
+   camera/tick range may provide a repeatable workload without matchmaking.
+   Validate playback on the actual build through Steam first. No suitable local
+   demo was found in this installation on Oct 16; no replay command was executed.
+   Do not assume Source/CS2 `timedemo` commands work in current Deadlock. Replay
+   playback does not measure live networking/input or replace a user-played match.
+
+Keep median/p95/p99 presentation intervals, stall counts, memory and power/thermal
+context alongside images; require the same scene and adequate sample counts.
+Do not optimize based on menu-only 60 FPS readings. Existing `benchmark` commands
+already support PID-filtered logging and timestamped scene markers.
+
+Steam fullscreen is a separate UX candidate. Valve describes
+[Big Picture](https://store.steampowered.com/bigpicture/) as a TV/controller interface;
+it is not evidence of faster Deadlock rendering. Keep the current desktop client
+default. Qualify optional Big Picture on both displays, focus recovery and exit
+before exposing it as a launcher preference, without altering the game profile.
+
+Current startup findings and outstanding uncertainty are recorded in
+[the Retina investigation](STARTUP-INVESTIGATION.md).

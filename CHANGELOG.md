@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.4 — development
+
+- Show detached Play startup, delayed failure, process readiness and Game Mode
+  restoration on the Play page; isolate status by workspace/profile and bound
+  read-only helper output. Closing the manager still leaves Play ownership intact.
+- Identify a Steam main-loop stall at the startup deadline using only the current
+  launch log. Do not abort on a recoverable warning or claim a Retina root-cause fix.
+- Include Steam's 64-bit overlay in shutdown verification. If only orphaned
+  overlays remain for five seconds after the game/client/browser/service exit,
+  recheck bottle ownership and process identity before sending SIGTERM to those
+  helpers only. Report recovered shutdown separately from normal overlay exit.
+  Record requested synchronization environment in private launch evidence.
+- Briefly recheck a helper that loses its working directory during shutdown;
+  still reject a live process whose bottle cannot be identified. Cover exit,
+  transient inspection failure, PID reuse and missing-cwd results with tests.
+- Add synthetic manager snapshot fixtures and isolated status-reader tests;
+  fix clipped display instructions at narrow widths. Document the remaining
+  Retina/Steam uncertainty and separate UI/replay/sandbox qualification lanes.
+
 ## 0.4.3 — development
 
 - Wait for the selected Wine server to finish after Windows Steam exits, so

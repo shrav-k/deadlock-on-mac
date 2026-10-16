@@ -129,7 +129,7 @@ class ExitTests(unittest.TestCase):
             calls.append('steam shutdown')
             return Mock(returncode=0)
         self.wine_shutdown.side_effect = lambda profile: calls.append('wine finished')
-        with patch.object(game_exit, 'close', side_effect=close), patch.object(game_exit, 'send', side_effect=send), patch.object(game_exit, 'steam_control_command', return_value=['steam', '-shutdown']), patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', side_effect=[{30: 'steam'}, {}, {31: 'helper'}, {}, {}, {}, {}]) as inspect, patch.object(game_exit, 'finish_session', return_value='restored'), patch.object(game_exit.time, 'sleep') as sleep:
+        with patch.object(game_exit, 'close', side_effect=close), patch.object(game_exit, 'send', side_effect=send), patch.object(game_exit, 'steam_control_command', return_value=['steam', '-shutdown']), patch.object(game_session, 'games_in_prefix', return_value={}), patch.object(game_session, 'processes_in_prefix', side_effect=[{30: 'steam'}, {}, {31: 'helper'}, {}, {}, {}, {}, {}, {}, {}, {}]) as inspect, patch.object(game_exit, 'finish_session', return_value='restored'), patch.object(game_exit.time, 'sleep') as sleep:
             self.assertIn('helpers exited', game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', report=Mock()))
         sleep.assert_called_once()
         self.assertEqual(calls, ['game restored', 'steam shutdown', 'wine finished'])
@@ -153,6 +153,19 @@ class ExitTests(unittest.TestCase):
             game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', timeout=0, report=Mock())
         kill.assert_not_called()
 
+    def test_64_bit_overlay_alone_prevents_false_shutdown_success(self):
+        def inspect(prefix, name):
+            self.assertEqual(prefix, self.profile['prefix'])
+            return {31: 'owned overlay'} if name == 'gameoverlayui64.exe' else {}
+        with patch.object(game_exit, 'close', return_value='closed'), \
+                patch.object(game_exit, 'send') as send, \
+                patch.object(game_session, 'games_in_prefix', return_value={}), \
+                patch.object(game_session, 'processes_in_prefix', side_effect=inspect), \
+                self.assertRaisesRegex(ManagerError, 'Steam did not close'):
+            game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', timeout=0, report=Mock())
+        send.assert_not_called()
+        self.wine_shutdown.assert_not_called()
+
     def test_slow_shutdown_reports_progress_without_claiming_delivery_success(self):
         clock = [0.0]
         def sleep(seconds):
@@ -172,6 +185,62 @@ class ExitTests(unittest.TestCase):
         with patch('deadlock_mac.cli.load_profile', return_value=self.profile), patch.object(game_exit, 'close_steam', return_value='closed') as close, redirect_stdout(StringIO()):
             self.assertEqual(main(['--workspace', str(self.root), 'steam-exit']), 0)
         self.assertEqual(close.call_args.args[:2], (self.root, self.profile))
+
+    def test_orphan_overlay_recovery_is_delayed_scoped_and_reported(self):
+        clock = [0.0]
+        alive = [True]
+        def inspect(prefix, name):
+            self.assertEqual(prefix, self.profile['prefix'])
+            return {42: 'overlay identity'} if name == 'gameoverlayui64.exe' and alive[0] else {}
+        def kill(pid, sig):
+            self.assertGreaterEqual(clock[0], 5)
+            self.assertEqual((pid, sig), (42, game_exit.signal.SIGTERM))
+            alive[0] = False
+        with patch.object(game_exit, 'close', return_value='game closed'), \
+                patch.object(game_session, 'games_in_prefix', return_value={}), \
+                patch.object(game_session, 'processes_in_prefix', side_effect=inspect), \
+                patch.object(game_exit.game_mode, 'process_identity', return_value='overlay identity'), \
+                patch.object(game_exit.os, 'kill', side_effect=kill) as stopped, \
+                patch.object(game_exit, 'finish_session', return_value='restored'), \
+                patch.object(game_exit.time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(game_exit.time, 'sleep', side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)):
+            message = game_exit.close_steam(self.root, self.profile, self.root / 'steam.log', timeout=10, report=Mock())
+        self.assertIn('required SIGTERM recovery', message)
+        stopped.assert_called_once()
+        self.wine_shutdown.assert_called_once()
+
+    def test_orphan_cleanup_refuses_a_restarted_game_or_client(self):
+        for game in (True, False):
+            with patch.object(game_session, 'games_in_prefix', return_value={1: 'game'} if game else {}), \
+                    patch.object(game_session, 'processes_in_prefix', return_value={2: 'client'}), \
+                    patch.object(game_exit.os, 'kill') as kill, self.assertRaisesRegex(ManagerError, 'restarted'):
+                game_exit.stop_orphan_overlays(self.profile, {'gameoverlayui64.exe': {42: 'old identity'}}, Mock())
+            kill.assert_not_called()
+
+    def test_orphan_cleanup_never_signals_a_reused_pid_or_changed_bottle(self):
+        for current, identity in (({}, 'old'), ({42: 'new'}, 'new'), ({42: 'old'}, 'new')):
+            with patch.object(game_session, 'games_in_prefix', return_value={}), \
+                    patch.object(game_session, 'processes_in_prefix', side_effect=lambda prefix, name: current if name in game_exit.STEAM_OVERLAYS else {}), \
+                    patch.object(game_exit.game_mode, 'process_identity', return_value=identity), \
+                    patch.object(game_exit.os, 'kill') as kill:
+                self.assertFalse(game_exit.stop_orphan_overlays(self.profile, {'gameoverlayui64.exe': {42: 'old'}}, Mock()))
+            kill.assert_not_called()
+
+    def test_overlay_that_exits_before_signal_is_not_reported_as_recovered(self):
+        report = Mock()
+        with patch.object(game_session, 'games_in_prefix', return_value={}), \
+                patch.object(game_session, 'processes_in_prefix', side_effect=lambda prefix, name: {42: 'old'} if name in game_exit.STEAM_OVERLAYS else {}), \
+                patch.object(game_exit.game_mode, 'process_identity', return_value='old'), \
+                patch.object(game_exit.os, 'kill', side_effect=ProcessLookupError):
+            self.assertFalse(game_exit.stop_orphan_overlays(self.profile, {'gameoverlayui64.exe': {42: 'old'}}, report))
+        report.assert_not_called()
+
+    def test_orphan_cleanup_is_not_a_crossover_or_general_process_killer(self):
+        with patch.object(game_exit.os, 'kill') as kill:
+            self.assertFalse(game_exit.stop_orphan_overlays({**self.profile, 'provider': 'crossover'}, {'gameoverlayui64.exe': {42: 'old'}}, Mock()))
+            with self.assertRaisesRegex(ManagerError, 'not a Steam overlay'):
+                game_exit.stop_orphan_overlays(self.profile, {'other.exe': {42: 'old'}}, Mock())
+        kill.assert_not_called()
 
     def test_incomplete_wine_shutdown_is_not_reported_as_success(self):
         self.wine_shutdown.side_effect = ManagerError('Wine still finishing')

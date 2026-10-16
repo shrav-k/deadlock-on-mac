@@ -118,8 +118,10 @@ Exit Windows Steam and repeated no-op exits. Every cycle starts Steam cold.
 Omit `--manager-app` to test the source CLI. It neither enters a sandbox/match nor
 changes display/performance settings. Private reports/logs live under
 `DeadlockData/lifecycle-checks/`. A failure stops the run and attempts only normal
-game closure; no force-kill or automatic prompt confirmation is used. A process
-surviving startup is not proof of correct visuals or gameplay compatibility.
+game closure; the game/client are never force-killed or prompts automatically
+confirmed. Exit Windows Steam may retire a verified orphan overlay after its
+owners have exited. Reports distinguish that recovery from normal helper exit.
+A process surviving startup is not proof of correct visuals or gameplay compatibility.
 
 ## Steam-only restart and shutdown checks
 
@@ -138,7 +140,8 @@ tests a repeated no-op shutdown. It never launches Deadlock. An existing Steam
 client can be used for the first cycle; later cycles start after verified client
 shutdown. Process presence is not a login or UI acceptance check. If the user
 starts Deadlock, the harness stops without closing it. A failed shutdown stops
-the test and preserves evidence; it never escalates to force termination.
+the test and preserves evidence; it never escalates to forcing the game/client
+closed. The same separately reported orphan-overlay recovery can apply.
 
 Actual buttons, Command–Q and red-close still need UI acceptance. A cold restart
 recovering a hung client does not establish that its underlying hang is fixed.

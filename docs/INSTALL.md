@@ -380,6 +380,12 @@ prompts or affect native Mac Steam. A failed game exit stops the Steam-shutdown
 sequence so the error remains visible. Repeating either command after closure
 does not reopen Steam or Deadlock.
 
+If only an orphaned Steam overlay remains after its game, Steam client, browser
+and service have exited, the manager waits five seconds and rechecks ownership
+before stopping that helper with SIGTERM. Details explicitly report this recovery;
+it is not a normal overlay exit. No game/client, other bottle or Wine server is
+terminated, and there is no SIGKILL escalation.
+
 **Quit Manager**, Command–Q, and closing the manager's window exit only the
 manager. Steam/game stay running and the detached watcher still restores Game
 Mode on game exit. If an operation is active, quitting waits for it to finish;

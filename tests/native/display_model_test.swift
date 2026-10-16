@@ -62,6 +62,20 @@ import Foundation
         model.automaticGameMode = false
         precondition(model.playArguments == ["launch", "--without-game-mode"])
         precondition(model.gameModeSummary.contains("leave the system policy unchanged"), "Opt-out must not claim the system is Off")
+        func session(_ extra: String) -> String {
+            let json = "{\"workspace\":\"/Users/example/Deadlock\",\"profile\":\"highball\",\(extra)}"
+            return try! JSONDecoder().decode(PlaySessionReport.self, from: Data(json.utf8))
+                .summary(workspace: "/Users/example/Deadlock", profile: "highball")
+        }
+        precondition(session(#""phase":"waiting","restore_pending":true,"watcher_running":true"#).contains("Waiting for Deadlock"))
+        precondition(session(#""phase":"playing","restore_pending":true,"watcher_running":true"#).contains("process is running; confirm the game window"))
+        precondition(session(#""phase":"finished","restore_pending":false,"error":"Steam stalled""#).contains("Play session failed: Steam stalled"))
+        precondition(session(#""phase":"finished","restore_pending":false,"error":"Steam stalled""#).contains("Previous Game Mode policy restored"))
+        precondition(session(#""phase":"waiting","restore_pending":true,"watcher_running":false"#).contains("no longer running"))
+        precondition(session(#""phase":"restore-failed","restore_pending":true,"restore_error":"service unavailable""#).contains("restoration needs attention"))
+        let other = try! JSONDecoder().decode(PlaySessionReport.self, from: Data(#"{"phase":"playing","workspace":"/another","profile":"highball"}"#.utf8))
+        precondition(other.summary(workspace: "/Users/example/Deadlock", profile: "highball").contains("No tracked Play session"))
+        print("PASS session status: delayed failure, waiting, process-only readiness, restoration failure, interrupted watcher and workspace isolation")
         print("PASS display/Play policy: Retina and standard displays, measured units, saved output, unapplied choices, disconnected/changed targets, Game Mode argv and opt-out")
     }
 }

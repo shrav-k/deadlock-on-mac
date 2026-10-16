@@ -31,6 +31,75 @@ struct DisplayReport: Decodable {
     let selection: DisplaySelection?
 }
 
+// A successful launch command only acknowledges dispatch. The detached watcher
+// owns startup/exit and can fail after the command has returned successfully.
+struct PlaySessionReport: Decodable {
+    let phase: String
+    let workspace: String?
+    let profile: String?
+    let restore_pending: Bool?
+    let watcher_running: Bool?
+    let error: String?
+    let restore_error: String?
+
+    func summary(workspace expectedWorkspace: String, profile expectedProfile: String) -> String {
+        guard phase != "idle" else { return "No tracked Play session." }
+        guard workspace == URL(fileURLWithPath: expectedWorkspace).standardizedFileURL.resolvingSymlinksInPath().path,
+              profile == expectedProfile else { return "No tracked Play session for this workspace and profile." }
+        if let restore_error { return "Game Mode restoration needs attention: \(restore_error)" }
+        if restore_pending == true && watcher_running != true {
+            return "Play watcher is no longer running. Check Diagnostics → Play Session Status before recovery."
+        }
+        if let error { return "Play session failed: \(error)\(restore_pending == false ? " Previous Game Mode policy restored." : "")" }
+        switch phase {
+        case "waiting": return "Waiting for Deadlock to start through Steam. Check Steam for login, update or Cloud prompts."
+        case "playing" where watcher_running == true && restore_pending == true:
+            return "Deadlock process is running; confirm the game window. Game Mode is managed until exit."
+        case "finished" where restore_pending == false:
+            return "Play session ended. Previous Game Mode policy restored."
+        default: return "Play session state is unavailable. Check Diagnostics → Play Session Status."
+        }
+    }
+}
+
+enum PlaySessionReader {
+    static func read(resources: URL, workspace: String, profile: String) -> String {
+        let process = Process(), pipe = Pipe()
+        process.executableURL = resources.appendingPathComponent("python/bin/python3")
+        process.arguments = ["-I", "-B", "-u", resources.appendingPathComponent("launcher.py").path,
+                             "--workspace", workspace, "--profile", profile, "game-mode", "--session"]
+        var env = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
+        for key in ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL"] {
+            env[key] = ProcessInfo.processInfo.environment[key]
+        }
+        process.environment = env
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            // This read-only helper never spawns Wine or mutates Game Mode.
+            let timeout = DispatchWorkItem { if process.isRunning { process.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 12, execute: timeout)
+            defer { timeout.cancel() }
+            var data = Data()
+            while true {
+                let chunk = pipe.fileHandleForReading.availableData
+                if chunk.isEmpty { break }
+                data.append(chunk)
+                if data.count > 65_536 {
+                    if process.isRunning { process.terminate() }
+                    process.waitUntilExit()
+                    return "Play status could not be read. Check Diagnostics → Play Session Status."
+                }
+            }
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { throw CocoaError(.fileReadUnknown) }
+            return try JSONDecoder().decode(PlaySessionReport.self, from: data).summary(workspace: workspace, profile: profile)
+        } catch { return "Play status could not be read. Check Diagnostics → Play Session Status." }
+    }
+}
+
 @MainActor
 final class ManagerModel: ObservableObject {
     @Published var workspace = UserDefaults.standard.string(forKey: "workspace") ?? FileManager.default.homeDirectoryForCurrentUser
@@ -44,6 +113,7 @@ final class ManagerModel: ObservableObject {
     var running: Bool { lifecycle.running }
     @Published var status = "Ready."
     @Published var output = ""
+    @Published var playSessionSummary = "Checking Play session…"
     @Published private(set) var operationStartedAt: Date?
     @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
     @Published var gameModeSetupSummary = "Checked automatically during setup. You can also check it here before Play."
@@ -89,6 +159,21 @@ final class ManagerModel: ObservableObject {
     var setupArguments: [String] { ["bootstrap"] + playArguments.dropFirst() }
 
     func refreshDisplays() { run(["display"], label: "Reading connected displays…") }
+
+    func monitorPlaySession() async {
+        guard let resources = Bundle.main.resourceURL else { return }
+        let selectedWorkspace = workspace, selectedProfile = profile
+        while !Task.isCancelled {
+            if !running {
+                let summary = await Task.detached {
+                    PlaySessionReader.read(resources: resources, workspace: selectedWorkspace, profile: selectedProfile)
+                }.value
+                guard !Task.isCancelled, workspace == selectedWorkspace, profile == selectedProfile else { return }
+                playSessionSummary = summary
+            }
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+        }
+    }
 
     var displayPrepareArguments: [String] { ["display", "--prepare", displayChoice, "--retina", retinaPolicy] }
     func prepareDisplay() {
@@ -255,7 +340,7 @@ final class ManagerModel: ObservableObject {
                     let messages = ["bootstrap": "Steam installed. Open Steam and allow it to update.",
                                     "steam": "Steam is starting. First startup may take a few minutes before sign-in appears.",
                                     "install": "Install request sent. Complete the download in Steam.",
-                                    "launch": "Play request sent. Check the game window.",
+                                    "launch": "Play request sent. Live session status is shown on the Play page.",
                                     "exit": "Deadlock is closed. Steam remains open; check Details for Game Mode restoration.",
                                     "steam-exit": "Windows Steam is closed. Check Details for Game Mode restoration.",
                                     "performance": "Settings saved. Restart Windows Steam for them to apply.",
@@ -315,6 +400,7 @@ struct ContentView: View {
                 OperationStatusView(model: model).padding(16)
             }
         }.frame(minWidth: 820, minHeight: 640)
+            .task(id: model.workspace + "\n" + model.profile) { await model.monitorPlaySession() }
     }
 }
 
@@ -336,6 +422,8 @@ struct PlayView: View {
                     Button("Exit Windows Steam") { model.run(["steam-exit"], label: "Closing Deadlock and Windows Steam…") }
                 }.fixedSize()
             }.controlSize(.large).disabled(model.running)
+            Label(model.playSessionSummary, systemImage: "info.circle")
+                .font(.callout).textSelection(.enabled).accessibilityIdentifier("play-session-status")
             GroupBox {
                 VStack(alignment: .leading, spacing: 14) {
                     Label(model.displaySummary, systemImage: "display")
@@ -412,9 +500,9 @@ struct ManagerSettingsView: View {
                     Button("Refresh") { model.refreshDisplays() }
                     Button("Apply Display") { model.prepareDisplay() }
                 }
-                Text(model.displaySummary).font(.caption)
+                Text(model.displaySummary).font(.caption).fixedSize(horizontal: false, vertical: true)
                 Text("Close Windows Steam before applying. Saves a backup, sets borderless output and matches Wine scaling to this display. Your macOS main display stays unchanged.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }.padding(8)
         }.disabled(model.running)
         GroupBox("Game Mode") {

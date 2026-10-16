@@ -75,17 +75,24 @@ def processes_in_prefix(prefix, executable, candidates=None):
         before = game_mode.process_identity(pid)
         if not before:
             continue
-        result = subprocess.run(["/usr/sbin/lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
-                                capture_output=True, text=True, timeout=5, env=clean_env())
-        if result.returncode:
-            if game_mode.process_identity(pid):
-                raise ManagerError(f"Could not identify {executable}'s bottle from its working directory.")
-            continue  # Process exited during inspection.
-        paths = [Path(line[1:]).resolve() for line in result.stdout.splitlines() if line.startswith("n/")]
-        if any(path.is_relative_to(prefix) for path in paths):
+        for attempt in range(3):
+            result = subprocess.run(["/usr/sbin/lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+                                    capture_output=True, text=True, timeout=5, env=clean_env())
             identity = game_mode.process_identity(pid)
-            if identity == before and identity.replace("\\", "/").lower().endswith("/" + executable.lower()):
-                games[pid] = identity
+            if identity != before:
+                break  # Exit or PID reuse during inspection; never act on the replacement.
+            paths = ([] if result.returncode else
+                     [Path(line[1:]).resolve() for line in result.stdout.splitlines() if line.startswith("n/")])
+            if not result.returncode and paths:
+                if (any(path.is_relative_to(prefix) for path in paths)
+                        and identity.replace("\\", "/").lower().endswith("/" + executable.lower())):
+                    games[pid] = identity
+                break
+            # An exiting helper may lose cwd before ps removes it. Recheck briefly,
+            # but never treat a persistently unidentifiable live process as absent.
+            if attempt == 2:
+                raise ManagerError(f"Could not identify {executable}'s bottle from its working directory.")
+            time.sleep(0.1)
     return games
 
 
@@ -138,7 +145,8 @@ def stop_session(directory=None):
     raise ManagerError("The watcher has not confirmed restoration. Check Play session status; recovery is still pending.")
 
 
-def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=180, previous=None):
+def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=180, previous=None,
+            startup_log=None):
     """A startup deadline only; once a game exists its lifetime is unbounded."""
     stopped = False
     handlers = {}
@@ -154,6 +162,8 @@ def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=18
                          "prefix": profile["prefix"], "phase": "waiting",
                          "started_utc": datetime.now(timezone.utc).isoformat()}
     state.update(watcher_pid=os.getpid(), watcher_identity=game_mode.process_identity(os.getpid()))
+    if startup_log is not None:
+        state['launch_log'] = str(startup_log)
     atomic_json(receipt, state)  # Persist recovery before any policy mutation.
     try:
         for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
@@ -175,7 +185,9 @@ def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=18
                 atomic_json(receipt, state)
                 break
             if time.monotonic() >= deadline:
-                raise ManagerError("Deadlock did not start within three minutes. Finish Steam's login/update prompts, then press Play again.")
+                from .steam_startup import failure_summary
+                detail = failure_summary(startup_log) if startup_log else None
+                raise ManagerError(detail or "Deadlock did not start within three minutes. Check Steam for login, updates or Cloud prompts before retrying.")
             time.sleep(1)
         check_policy_at = 0
         while not stopped and games:
@@ -240,7 +252,7 @@ def worker(workspace, profile_id, tool_path, response, log):
                 atomic_json(response, {"ok": True, "watcher_pid": os.getpid()})
                 print("Game Mode enabled. Watching Deadlock until it exits; no play-time limit.", flush=True)
 
-            session(tool, profile, workspace, receipt, launch, ready, previous=previous)
+            session(tool, profile, workspace, receipt, launch, ready, previous=previous, startup_log=log)
             print("Deadlock session ended; previous Game Mode policy restored.", flush=True)
     except (ManagerError, OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         if str(exc) == "Another manager operation is running in this workspace.":

@@ -1,12 +1,46 @@
 """Request normal game shutdown, then verify actual exit and policy restoration."""
 import os
 from pathlib import Path
+import signal
 import subprocess
 import time
 
 from . import game_mode, game_session
 from .runtime import environment, exit_command, steam_control_command, verify_crossover
 from .storage import ManagerError
+
+STEAM_CORE = ('steam.exe', 'steamwebhelper.exe', 'steamservice.exe')
+STEAM_OVERLAYS = ('gameoverlayui.exe', 'gameoverlayui64.exe')
+
+
+def stop_orphan_overlays(profile, overlays, report):
+    """Retire only observed overlay helpers whose game and Steam owners exited.
+
+    Wine's overlay can lose all windows yet remain alive after both owners leave;
+    WM_CLOSE cannot reach it. SIGTERM here is reported recovery, never a normal
+    game/client exit or a blanket wineserver kill. Never escalate to SIGKILL.
+    """
+    if profile['provider'] != 'wine':
+        return False
+    if any(name not in STEAM_OVERLAYS for name in overlays):
+        raise ManagerError('Refusing to stop a process that is not a Steam overlay.')
+    signalled = False
+    for name, processes in overlays.items():
+        for pid, identity in processes.items():
+            if (game_session.games_in_prefix(profile['prefix'])
+                    or any(game_session.processes_in_prefix(profile['prefix'], core) for core in STEAM_CORE)):
+                raise ManagerError('Steam or Deadlock restarted during overlay cleanup; no further processes were stopped.')
+            # Re-resolve bottle ownership and start identity immediately before signalling.
+            current = game_session.processes_in_prefix(profile['prefix'], name)
+            if current.get(pid) != identity or game_mode.process_identity(pid) != identity:
+                continue
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                continue  # Already exited; the caller still verifies all helpers/server.
+            signalled = True
+            report(f'Steam and Deadlock are closed. Sent SIGTERM to leftover {name} in this bottle; this is overlay recovery.')
+    return signalled
 
 
 def finish_session(workspace, profile_id, timeout=20):
@@ -60,7 +94,8 @@ def wait_for_wine_shutdown(profile, timeout=20):
                                 timeout=timeout)
     except subprocess.TimeoutExpired as exc:
         raise ManagerError('Windows Steam closed, but Wine is still finishing shutdown. '
-                           'Wait or close other apps in this bottle, then retry. No process was force-killed.') from exc
+                           'Wait or close other apps in this bottle, then retry. '
+                           'No game, Steam client or Wine server was force-killed.') from exc
     if result.returncode:
         raise ManagerError('Windows Steam closed, but Wine server shutdown could not be verified. '
                            'Inspect this profile before restarting.')
@@ -104,10 +139,27 @@ def close_steam(workspace, profile, log, timeout=60, report=print):
         report(f"Shutdown requested; waiting up to {timeout:g}s for Windows Steam and its helpers. Check Steam for prompts.")
     deadline = time.monotonic() + timeout
     next_report = time.monotonic() + 5
-    while any(game_session.processes_in_prefix(profile["prefix"], name)
-              for name in ("steam.exe", "steamwebhelper.exe", "steamservice.exe", "gameoverlayui.exe")):
+    orphan_since = None
+    orphan_cleanup_attempted = False
+    orphan_recovered = False
+    while True:
+        # Inspect every helper: an exited Steam client must not hide a 64-bit overlay.
+        remaining = {name: processes for name in (*STEAM_CORE, *STEAM_OVERLAYS)
+                     if (processes := game_session.processes_in_prefix(profile['prefix'], name))}
+        if not remaining:
+            break
         if time.monotonic() >= deadline:
-            raise ManagerError("Windows Steam did not close within the timeout. Check Steam for prompts or use Steam → Exit. You can quit the manager and retry after restarting Steam; no process was force-killed.")
+            detail = ('An orphan-overlay stop was attempted; no game or Steam client was force-killed.'
+                      if orphan_cleanup_attempted else 'No process was force-killed.')
+            raise ManagerError("Windows Steam did not close within the timeout. Check Steam for prompts or use Steam → Exit. " + detail)
+        if any(name in remaining for name in STEAM_CORE):
+            orphan_since = None
+        elif profile['provider'] == 'wine' and not orphan_cleanup_attempted:
+            if orphan_since is None:
+                orphan_since = time.monotonic()
+            elif time.monotonic() - orphan_since >= 5:
+                orphan_cleanup_attempted = True
+                orphan_recovered = stop_orphan_overlays(profile, remaining, report)
         if time.monotonic() >= next_report:
             report(f"Still waiting for Windows Steam ({max(0, deadline - time.monotonic()):.0f}s left). Check Steam for prompts; Quit Manager will wait for this step.")
             next_report = time.monotonic() + 5
@@ -116,4 +168,6 @@ def close_steam(workspace, profile, log, timeout=60, report=print):
         report('Steam clients are closed. Waiting for this profile\'s Wine session to finish…')
     wait_for_wine_shutdown(profile)
     message = "Windows Steam and its helpers exited. " if clients else "Windows Steam and its helpers are closed. "
+    if orphan_recovered:
+        message += 'A leftover overlay required SIGTERM recovery after Steam and Deadlock exited. '
     return message + finish_session(workspace, profile["id"])

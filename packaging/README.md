@@ -16,6 +16,13 @@ Version 0.4.2 includes matching FFmpeg libraries and automatically discovers,
 validates and prepares the compatible Apple Game Mode tool. A missing Xcode
 prerequisite is reported before Steam setup rather than at the first Play click.
 
+Version 0.4.4 adds live detached Play status, including startup errors that occur
+after Steam accepted the request. Status queries are read-only, bounded, scoped
+to the selected workspace/profile and independent of operation/quit ownership.
+`check_manager_app.py` also checks the real isolated status reader. Use
+`check_manager_snapshots.py --output <new-private-folder>` to render synthetic
+light/dark layout fixtures for review; these are not screenshots of live games.
+
 The bottom operation bar remains visible across pages, with Stop Grid/Restore
 while a diagnostic is active and expandable output. Quit Manager stays in the
 sidebar and standard app menu. Diagnostic cancellation uses a private EOF pipe;
@@ -183,3 +190,12 @@ Native helper hashes are sealed after ad-hoc signing; the enclosing app is then
 resealed and strictly verified. CI compiles both helpers and runs the display
 policy tests without starting Wine, Steam or a game. A local test grid and real
 menu acceptance remain separate requirements.
+
+## Exit qualification
+
+`check_lifecycle.py` verifies normal Deadlock exit, Game Mode restoration and
+complete Steam/Wine shutdown. The manager can retire a verified orphaned Steam
+overlay after its game and client have exited; the report labels this SIGTERM
+recovery separately from normal helper exit. A closure pass with
+`all_overlays_exited_normally: false` must not be advertised as a normal overlay
+shutdown pass. See [the startup investigation](../docs/STARTUP-INVESTIGATION.md).

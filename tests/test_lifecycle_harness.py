@@ -44,6 +44,16 @@ class SteamOnlyHarnessTests(unittest.TestCase):
         self.assertEqual(result['original_policy'], 'auto')
         self.assertIn('no game launch', result['scope'])
         self.assertIn('steam_exit_seconds', result['cycles'][0])
+        self.assertFalse(result['cycles'][0]['overlay_recovery'])
+        self.assertTrue(result['all_overlays_exited_normally'])
+
+    def test_recovered_overlay_is_not_a_normal_shutdown_pass(self):
+        self.run.side_effect = [subprocess.CompletedProcess([], 0, text, '') for text in (
+            'started', 'A leftover overlay required SIGTERM recovery after Steam and Deadlock exited.', 'already closed')]
+        result = self.check()
+        self.assertTrue(result['passed'])
+        self.assertTrue(result['cycles'][0]['overlay_recovery'])
+        self.assertFalse(result['all_overlays_exited_normally'])
 
     def test_user_started_game_is_left_alone(self):
         self.games.side_effect = [{}, {99: 'game'}]

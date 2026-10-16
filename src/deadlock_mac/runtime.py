@@ -169,18 +169,21 @@ def exit_command(profile):
 
 def start(profile, action, log, tuning=None):
     command = launch_command(profile, action)
+    env = environment(profile, tuning)
     if profile["provider"] == "crossover":
         verify_crossover(profile["runtime"])
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "wb") as stream:
         header = {"profile": profile["id"], "action": action,
                   "runtime": profile.get("runtime_version"), "dxmt": profile.get("dxmt_version"),
-                  "performance_requested": tuning}
+                  "performance_requested": tuning,
+                  # Requested environment, not proof of a previously started server's mode.
+                  "sync_environment": {key: env.get(key) for key in ("WINEMSYNC", "WINEESYNC")}}
         from .hotfix import status
         header["wine_hotfix"] = status(profile)
         stream.write(("# manager " + json.dumps(header) + "\n").encode())
         stream.flush()
-        process = subprocess.Popen(command, env=environment(profile, tuning), stdin=subprocess.DEVNULL,
+        process = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL,
                                    stdout=stream, stderr=subprocess.STDOUT,
                                    cwd=profile["prefix"], start_new_session=True)
         try:

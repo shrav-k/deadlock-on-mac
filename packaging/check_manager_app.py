@@ -12,6 +12,10 @@ REPO = Path(__file__).resolve().parents[1]
 WORKER = r'''import pathlib, subprocess, sys, time
 from deadlock_mac.diagnostic_control import cancellation
 root = pathlib.Path(sys.argv[sys.argv.index('--workspace') + 1])
+if sys.argv[-2:] == ['game-mode', '--session']:
+    fixture = root / 'session-fixture.json'
+    print(fixture.read_text() if fixture.exists() else '{"phase":"idle"}')
+    sys.exit(0)
 if '--manager-control-stdin' in sys.argv:
     with cancellation(sys.stdin) as stopped:
         # A real descendant is essential: Foundation Process.terminate used to
@@ -83,6 +87,14 @@ def main():
                         str(REPO / 'packaging/WineActivation.swift'),
                         str(REPO / 'tests/native/wine_activation_test.swift'), '-o', str(activation_test)], check=True)
         subprocess.run([str(activation_test)], check=True, timeout=10)
+        session_test = root / 'SessionReaderTests'
+        subprocess.run(['/usr/bin/xcrun', 'swiftc', '-parse-as-library', '-D', 'MANAGER_APP_TESTS',
+                        '-target', f'{platform.machine()}-apple-macos15.0',
+                        str(REPO / 'packaging/ManagerLifecycle.swift'),
+                        str(REPO / 'packaging/WineActivation.swift'),
+                        str(REPO / 'packaging/DeadlockManager.swift'),
+                        str(REPO / 'tests/native/session_reader_test.swift'), '-o', str(session_test)], check=True)
+        subprocess.run([str(session_test), str(resources), str(root)], check=True, timeout=20)
 
 
 if __name__ == '__main__':
