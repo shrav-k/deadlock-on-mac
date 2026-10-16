@@ -3,29 +3,16 @@
 The helper receives a private stdin pipe. Closing that pipe requests a normal
 window close; it cannot target Steam, the game, or another Wine application.
 """
-from contextlib import contextmanager
 import queue
-import signal
 import subprocess
 import threading
 import time
 
+from .diagnostic_control import cancellation
 from .storage import ManagerError
 
 
-@contextmanager
-def cancellation():
-    stopped = threading.Event()
-    previous = {sig: signal.signal(sig, lambda *_: stopped.set())
-                for sig in (signal.SIGTERM, signal.SIGINT)}
-    try:
-        yield stopped
-    finally:
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
-
-
-def run(command, *, env, cwd, stopped, report=print):
+def run(command, *, env, cwd, stopped, report=print, capture=lambda line: None):
     if stopped.is_set():
         raise ManagerError('Display test cancelled before startup.')
     process = subprocess.Popen(command + ['--control-stdin'], env=env, cwd=cwd,
@@ -61,6 +48,7 @@ def run(command, *, env, cwd, stopped, report=print):
             if line is None:
                 break
             output.append(line)
+            capture(line)
             if line.startswith(('test_window=', 'pointer_click=', 'window_active=', 'test_window_closed=', 'control_check=')):
                 report(line.rstrip())
         process.wait(timeout=20)

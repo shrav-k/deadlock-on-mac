@@ -28,7 +28,7 @@ final class WineActivationHandoff {
 
     func arm(workspace: String, profile: String, command: [String], report: @escaping (String) -> Void) {
         cancel()
-        guard ["steam", "launch", "install"].contains(command.first ?? "") || command == ["display", "--test-window"]
+        guard ["steam", "launch", "install"].contains(command.first ?? "") || (command.first == "display" && command.contains("--test-window"))
         else { return }
         guard profile.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]*$", options: .regularExpression) != nil else { return }
         let path = URL(fileURLWithPath: workspace).appendingPathComponent("DeadlockData/profiles/\(profile).json")

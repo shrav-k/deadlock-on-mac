@@ -33,7 +33,7 @@ final class ManagerModel: ObservableObject {
     }
     @Published private var lifecycle = ManagerLifecycle()
     var running: Bool { lifecycle.running }
-    @Published var status = "Ready to set up Windows Steam."
+    @Published var status = "Ready."
     @Published var output = ""
     @Published private(set) var operationStartedAt: Date?
     @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
@@ -44,6 +44,7 @@ final class ManagerModel: ObservableObject {
         didSet { UserDefaults.standard.set(automaticGameMode, forKey: "automaticGameMode") }
     }
     private var activeProcess: Process?
+    private var diagnosticControl: Pipe?
     private var diagnosticStopRequested = false
     @Published var displays: [ConnectedDisplay] = []
     @Published var displayChoice = "default"
@@ -64,7 +65,11 @@ final class ManagerModel: ObservableObject {
         displayChoice = report.selection?.choice ?? "default"
         retinaPolicy = report.selection?.retina_policy ?? "auto"
         if let selected = report.selection, selected.phase == "ready" {
-            displaySummary = "Prepared: \(selected.target_name ?? displayChoice). Play checks for display and settings changes."
+            if !["default", "external"].contains(displayChoice) && !displays.contains(where: { $0.id == displayChoice }) {
+                displaySummary = "\(selected.target_name ?? "Saved display") is disconnected. Choose a connected display in Settings and apply it."
+            } else {
+                displaySummary = "Prepared: \(selected.target_name ?? displayChoice). Play checks for display and settings changes."
+            }
         } else {
             displaySummary = "Choose a display, close Windows Steam, then Prepare. macOS main display stays unchanged."
         }
@@ -91,7 +96,8 @@ final class ManagerModel: ObservableObject {
     private func stopDiagnostic() {
         guard lifecycle.cancellableDiagnostic else { return }
         diagnosticStopRequested = true
-        activeProcess?.terminate()
+        status = testingDisplay ? "Closing the test grid…" : "Restoring Game Mode…"
+        try? diagnosticControl?.fileHandleForWriting.close()
     }
     func stopGameModeTest() { stopDiagnostic() }
     func stopDisplayTest() { stopDiagnostic() }
@@ -110,6 +116,8 @@ final class ManagerModel: ObservableObject {
     }
 
     private func finished(success: Bool) {
+        try? diagnosticControl?.fileHandleForWriting.close()
+        diagnosticControl = nil
         activeProcess = nil
         operationStartedAt = nil
         let result = lifecycle.finish(success: success)
@@ -143,6 +151,7 @@ final class ManagerModel: ObservableObject {
         operationStartedAt = Date()
         let selectedWorkspace = workspace
         let selectedProfile = profile
+        let diagnostic = lifecycle.cancellableDiagnostic
         activationHandoff.arm(workspace: selectedWorkspace, profile: selectedProfile, command: command) { [weak self] text in
             self?.output += text
         }
@@ -150,7 +159,8 @@ final class ManagerModel: ObservableObject {
             let process = Process()
             process.executableURL = resources.appendingPathComponent("python/bin/python3")
             process.arguments = ["-I", "-B", "-u", resources.appendingPathComponent("launcher.py").path,
-                                 "--workspace", selectedWorkspace, "--profile", selectedProfile] + command
+                                 "--workspace", selectedWorkspace, "--profile", selectedProfile]
+                + (diagnostic ? ["--manager-control-stdin"] : []) + command
             var env: [String: String] = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
             for key in ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL"] {
                 env[key] = ProcessInfo.processInfo.environment[key]
@@ -159,13 +169,16 @@ final class ManagerModel: ObservableObject {
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe
-            process.standardInput = FileHandle.nullDevice
+            let control = diagnostic ? Pipe() : nil
+            process.standardInput = control.map { $0 as Any } ?? FileHandle.nullDevice
             do {
                 try process.run()
+                try? control?.fileHandleForReading.close()
                 await MainActor.run {
                     self.activeProcess = process
+                    self.diagnosticControl = control
                     if (self.lifecycle.quitPending || self.diagnosticStopRequested) && self.lifecycle.cancellableDiagnostic {
-                        process.terminate()
+                        try? control?.fileHandleForWriting.close()
                     }
                 }
                 while true {
@@ -202,6 +215,8 @@ final class ManagerModel: ObservableObject {
                     self.finished(success: code == 0)
                 }
             } catch {
+                try? control?.fileHandleForReading.close()
+                try? control?.fileHandleForWriting.close()
                 let message = error.localizedDescription
                 await MainActor.run { self.status = message; self.finished(success: false) }
             }
@@ -209,192 +224,241 @@ final class ManagerModel: ObservableObject {
     }
 }
 
+enum ManagerPage: String, CaseIterable, Identifiable {
+    case play = "Play", settings = "Settings", diagnostics = "Diagnostics"
+    var id: String { rawValue }
+    var icon: String {
+        switch self { case .play: "play.fill"; case .settings: "slider.horizontal.3"; case .diagnostics: "stethoscope" }
+    }
+}
+
 struct ContentView: View {
     @ObservedObject var model: ManagerModel
-    @State private var showDetails = true
+    @State private var page: ManagerPage? = .play
+    var body: some View {
+        NavigationSplitView {
+            VStack(spacing: 0) {
+                List(ManagerPage.allCases, selection: $page) { item in
+                    Label(item.rawValue, systemImage: item.icon).tag(item)
+                }.listStyle(.sidebar)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("DEVELOPMENT PREVIEW").font(.caption2).foregroundStyle(.secondary)
+                    Button("Quit Manager") { NSApp.terminate(nil) }.buttonStyle(.plain)
+                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            }.navigationSplitViewColumnWidth(min: 150, ideal: 170, max: 210)
+        } detail: {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        switch page ?? .play {
+                        case .play: PlayView(model: model)
+                        case .settings: ManagerSettingsView(model: model)
+                        case .diagnostics: ManagerDiagnosticsView(model: model)
+                        }
+                    }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Divider()
+                OperationStatusView(model: model).padding(16)
+            }
+        }.frame(minWidth: 820, minHeight: 640)
+    }
+}
+
+struct PlayView: View {
+    @ObservedObject var model: ManagerModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Image(systemName: "gamecontroller.fill").font(.system(size: 44)).foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Deadlock").font(.largeTitle.bold())
+                Text("Your Steam account, library and friends.").foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+                Button { model.play() } label: { Label("Play", systemImage: "play.fill").frame(minWidth: 90) }
+                    .buttonStyle(.borderedProminent).tint(.orange)
+                Button("Exit Deadlock") { model.run(["exit"], label: "Asking Steam to close Deadlock…") }
+                Menu("Steam") {
+                    Button("Open Windows Steam") { model.run(["steam"], label: "Opening Steam…") }
+                    Button("Exit Windows Steam") { model.run(["steam-exit"], label: "Closing Deadlock and Windows Steam…") }
+                }.fixedSize()
+            }.controlSize(.large).disabled(model.running)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label(model.displaySummary, systemImage: "display")
+                    Label(model.automaticGameMode ? "Game Mode enabled during Play" : "Automatic Game Mode disabled", systemImage: "speedometer")
+                    Text("Game Mode restores after Deadlock exits. Quitting this manager leaves the game and Steam running.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
+            }
+            Text("First time here? Open Settings → Installation to set up Steam, sign in and install Deadlock.")
+                .font(.callout).foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct OperationStatusView: View {
+    @ObservedObject var model: ManagerModel
+    @State private var showOutput = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                if model.running { ProgressView().controlSize(.small) }
+                Text(model.status).font(.callout).textSelection(.enabled)
+                Spacer()
+                if model.testingDisplay { Button("Stop Grid") { model.stopDisplayTest() } }
+                if model.testingGameMode { Button("Stop and Restore") { model.stopGameModeTest() } }
+                if let started = model.operationStartedAt {
+                    TimelineView(.periodic(from: started, by: 1)) { context in
+                        Text("\(max(0, Int(context.date.timeIntervalSince(started))))s")
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            DisclosureGroup("Operation details", isExpanded: $showOutput) {
+                ScrollView {
+                    Text(model.output.isEmpty ? "No operation output." : model.output)
+                        .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(height: 150)
+            }.font(.caption)
+        }
+    }
+}
+
+struct ManagerSettingsView: View {
+    @ObservedObject var model: ManagerModel
+    var body: some View {
+        Text("Settings").font(.largeTitle.bold())
+        GroupBox("Display") {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("Play on", selection: $model.displayChoice) {
+                    Text("System main display").tag("default")
+                    Text("Prefer external (one connected)").tag("external")
+                    ForEach(model.displays) { display in Text(display.label).tag(display.id) }
+                    if !["default", "external"].contains(model.displayChoice) && !model.displays.contains(where: { $0.id == model.displayChoice }) {
+                        Text("Saved display — disconnected").tag(model.displayChoice)
+                    }
+                }
+                Picker("Retina scaling", selection: $model.retinaPolicy) {
+                    Text("Match selected display").tag("auto")
+                    Text("On").tag("on"); Text("Off").tag("off")
+                }
+                HStack {
+                    Button("Refresh") { model.refreshDisplays() }
+                    Button("Apply Display") { model.prepareDisplay() }
+                }
+                Text(model.displaySummary).font(.caption)
+                Text("Close Windows Steam before applying. Saves a backup, sets borderless output and matches Wine scaling to this display. Your macOS main display stays unchanged.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.padding(8)
+        }.disabled(model.running)
+        GroupBox("Game Mode") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Enable during Play and restore on exit", isOn: $model.automaticGameMode)
+                Text("No time limit. The Play watcher continues if you close the manager.").font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("Apple tool") {
+                    HStack {
+                        Button("Choose…") { model.chooseGameModeTool() }
+                        Text(model.gameModeTool.isEmpty ? "Selected Xcode toolchain" : model.gameModeTool)
+                            .font(.caption).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                    }
+                }
+            }.padding(8)
+        }.disabled(model.running)
+        GroupBox("Performance") {
+            VStack(alignment: .leading, spacing: 10) {
+                Button("Set game and menu limits to 60 FPS") {
+                    model.run(["game-fps", "--cap", "60", "--menu-cap", "60", "--apply"], label: "Backing up and saving FPS limits…")
+                }
+                Text("Requires Windows Steam closed. Resolution, rendering quality and upscaling are separate settings; test them in the game after display qualification.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
+        }.disabled(model.running)
+        DisclosureGroup("Installation") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack { TextField("Workspace", text: $model.workspace); Button("Choose Folder…") { model.chooseWorkspace() } }
+                TextField("Runtime profile", text: $model.profile)
+                HStack {
+                    Button("Set Up Steam") { model.run(["bootstrap"], label: "Installing verified components and Steam…") }
+                    Button("Open Steam") { model.run(["steam"], label: "Opening Steam…") }
+                    Button("Install Deadlock") { model.run(["install"], label: "Opening Deadlock in Steam…") }
+                }
+                Text("Sign in and complete Steam Guard in Windows Steam. Steam handles downloads and updates. A new workspace creates a separate installation and uses more disk space.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.padding(.top, 8).disabled(model.running)
+        }
+    }
+}
+
+struct ManagerDiagnosticsView: View {
+    @ObservedObject var model: ManagerModel
+    @State private var presentation = "popup"
     @State private var displayMode = "borderless"
     @State private var displayWidth = ""
     @State private var displayHeight = ""
     var body: some View {
-        ScrollView {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top) {
-                Image(systemName: "gamecontroller.fill").font(.system(size: 36)).foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Deadlock on Mac").font(.largeTitle.bold())
-                    Text("Free runtime · Your Steam account").foregroundStyle(.secondary)
+        Text("Diagnostics").font(.largeTitle.bold())
+        Text("Display checks run without gameplay. Results and partial logs stay in your workspace.").foregroundStyle(.secondary)
+        GroupBox("Display test") {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("Window presentation", selection: $presentation) {
+                    Text("Win32 borderless popup (baseline)").tag("popup")
+                    Text("SDL fullscreen desktop (candidate)").tag("sdl-desktop")
                 }
-                Spacer()
-                Text("DEVELOPMENT PREVIEW").font(.caption.bold()).padding(8)
-                    .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
-            }
-            Text("Install Windows Steam, sign into your existing account, then download and play Deadlock. Steam handles your library, updates and friends.")
-                .fixedSize(horizontal: false, vertical: true)
-            GroupBox("Installation folder") {
-                HStack {
-                    TextField("Deadlock workspace", text: $model.workspace)
-                    Button("Choose…") { model.chooseWorkspace() }
-                }.padding(5)
-                HStack {
-                    Text("Profile").foregroundStyle(.secondary)
-                    TextField("Profile", text: $model.profile).frame(width: 170)
-                    Spacer()
-                    Text("Use a new folder for a clean installation.").font(.caption).foregroundStyle(.secondary)
-                }.padding(5)
-            }.disabled(model.running)
-            HStack(spacing: 10) {
-                Button("1. Set up Steam") { model.run(["bootstrap"], label: "Downloading verified components and installing Steam…") }
-                    .buttonStyle(.borderedProminent)
-                Button("2. Open Steam") { model.run(["steam"], label: "Opening Steam…") }
-                Button("3. Install Deadlock") { model.run(["install"], label: "Opening Deadlock in Steam…") }
-                Button("Play") { model.play() }
-                Spacer()
-            }.controlSize(.large).disabled(model.running)
-            HStack {
-                Button("Exit Deadlock") { model.run(["exit"], label: "Asking Steam to close Deadlock…") }.disabled(model.running)
-                Button("Exit Windows Steam") { model.run(["steam-exit"], label: "Closing Deadlock and Windows Steam…") }.disabled(model.running)
-                Spacer()
-                Button("Quit Manager") { NSApp.terminate(nil) }
-            }
-            // Keep operation feedback beside the controls, above the settings
-            // that otherwise push errors and pending-quit status below the fold.
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    if model.running { ProgressView().controlSize(.small) }
-                    Text(model.status).font(.callout).textSelection(.enabled)
-                    Spacer()
-                    if let started = model.operationStartedAt {
-                        TimelineView(.periodic(from: started, by: 1)) { context in
-                            Text("\(max(0, Int(context.date.timeIntervalSince(started))))s elapsed")
-                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        }
-                    }
+                Button("Start Test Grid") {
+                    model.run(["display", "--test-window", "--presentation", presentation],
+                              label: "Grid: check four edges, click corner squares, then Command–Tab away and back…")
                 }
-                if let latest = model.output.split(separator: "\n").last {
-                    Text(String(latest)).font(.caption).textSelection(.enabled)
-                        .lineLimit(3).foregroundStyle(.secondary)
-                }
-            }
-            Text("Exit Windows Steam closes Deadlock first. Quit Manager leaves Steam and the game running; Game Mode still restores when the game exits.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("Complete Steam Guard in Steam. Cloud support depends on the game; resolve any sync conflicts yourself.")
-                .font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Button("Check setup") { model.run(["doctor"], label: "Checking installation…") }
-                Button("60 FPS + performance HUD") {
-                    model.run(["performance", "--fps-cap", "60", "--hud", "on", "--hud-log", "on"], label: "Saving test settings…")
-                }
-                Button("Set game and menu limits to 60 FPS") {
-                    model.run(["game-fps", "--cap", "60", "--menu-cap", "60", "--apply"], label: "Backing up and saving game FPS limits…")
-                }
-            }.disabled(model.running)
-            GroupBox("Display settings") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Picker("Play on", selection: $model.displayChoice) {
-                            Text("System main display").tag("default")
-                            Text("Prefer external (one connected)").tag("external")
-                            ForEach(model.displays) { display in Text(display.label).tag(display.id) }
-                            if !["default", "external"].contains(model.displayChoice) && !model.displays.contains(where: { $0.id == model.displayChoice }) {
-                                Text("Saved display — disconnected").tag(model.displayChoice)
-                            }
-                        }
-                        Button("Refresh displays") { model.refreshDisplays() }
-                    }
-                    HStack {
-                        Picker("Retina scaling", selection: $model.retinaPolicy) {
-                            Text("Match selected display").tag("auto")
-                            Text("On").tag("on")
-                            Text("Off").tag("off")
-                        }.frame(width: 280)
-                        Button("Prepare display") { model.prepareDisplay() }
-                        Button("Test grid") { model.run(["display", "--test-window"], label: "Test grid: click four corner squares, Command–Tab away/back, then Escape or Stop Grid to close…") }
-                    }
-                    Text(model.displaySummary).font(.caption).fixedSize(horizontal: false, vertical: true)
-                    Text("Preparation requires Steam closed and changes borderless size plus bottle-wide Retina scaling with backups. Missing displays or changed layouts stop Play until prepared again. Test grid uses no gameplay; Escape closes it.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Button("Let the game manage displays") { model.run(["display", "--clear"], label: "Disabling display management…") }
-                }.padding(5).disabled(model.running)
-                if model.testingDisplay {
-                    Button("Stop Grid") { model.stopDisplayTest() }
-                }
-                Divider()
-                HStack {
-                    Picker("Mode", selection: $displayMode) {
-                        Text("Fullscreen").tag("fullscreen")
-                        Text("Borderless").tag("borderless")
-                    }.frame(width: 210)
-                    TextField("Width", text: $displayWidth).frame(width: 70)
-                    Text("×")
-                    TextField("Height", text: $displayHeight).frame(width: 70)
-                    Button("Preview") {
-                        model.run(["graphics-preset", "--mode", displayMode, "--width", displayWidth, "--height", displayHeight], label: "Previewing display changes…")
-                    }
-                    Button("Apply with backup") {
-                        model.run(["graphics-preset", "--mode", displayMode, "--width", displayWidth, "--height", displayHeight, "--apply"], label: "Backing up and updating display settings…")
-                    }
-                }.padding(5).disabled(model.running)
-                Text("Close Windows Steam before applying. Use a resolution supported by your display; graphics quality and render scale are preserved.")
+                Text("Apply the connected display in Settings first, with Steam closed. Check the menu bar with the pointer centered. Escape or Stop Grid closes the test; there is no timer.")
                     .font(.caption).foregroundStyle(.secondary)
-                HStack {
-                    Button("Retina status") { model.run(["retina"], label: "Reading Wine Retina setting…") }
-                    Button("Enable Retina") { model.run(["retina", "--set", "on", "--apply"], label: "Backing up and enabling Retina…") }
-                    Button("Disable Retina") { model.run(["retina", "--set", "off", "--apply"], label: "Backing up and disabling Retina…") }
-                }.padding(5).disabled(model.running)
-                Text("Experimental: Retina exposes full pixel resolution for high-resolution borderless play. Requires Steam closed and affects this whole Wine bottle. Verify screen coverage, pointer alignment and app switching after restart.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            DisclosureGroup("Wine exit hotfix") {
-                HStack {
-                    Button("Check hotfix") { model.run(["wine-hotfix"], label: "Verifying Wine exit hotfix…") }
-                    Button("Enable") { model.run(["wine-hotfix", "--set", "on"], label: "Enabling verified hotfix…") }
-                    Button("Roll back") { model.run(["wine-hotfix", "--set", "off"], label: "Disabling hotfix…") }
-                }.disabled(model.running)
-                Text("Close Windows Steam before changing the hotfix. The original Wine engine stays intact.")
+            }.padding(8)
+        }.disabled(model.running)
+        GroupBox("Checks") {
+            HStack {
+                Button("Check Setup") { model.run(["doctor"], label: "Checking installation…") }
+                Button("Game Mode Status") { model.gameMode() }
+                Button("Play Session Status") { model.gameMode(["--session"]) }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
+        }.disabled(model.running)
+        DisclosureGroup("Performance recording") {
+            Button("Enable 60 FPS cap and Metal HUD logging") {
+                model.run(["performance", "--fps-cap", "60", "--hud", "on", "--hud-log", "on"], label: "Saving performance recording settings…")
+            }.padding(.top, 8).disabled(model.running)
+        }
+        DisclosureGroup("Recovery") {
+            VStack(alignment: .leading, spacing: 10) {
+                Button("Recover Interrupted Play") { model.gameMode(["--restore-session"]) }
+                Button("End Game Mode Session and Restore") { model.gameMode(["--stop-session"]) }
+                Button("Restore Interrupted Timed Test") { model.gameMode(["--restore"]) }
+                Button("Let the Game Manage Displays") { model.run(["display", "--clear"], label: "Disabling display management…") }
+            }.padding(.top, 8).disabled(model.running)
+        }
+        DisclosureGroup("Experimental display settings") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("These direct game settings can invalidate the prepared display. Fullscreen is still under qualification; close Steam and retain the backup.")
                     .font(.caption).foregroundStyle(.secondary)
-            }
-            Text("Exit Windows Steam before changing test settings. Display settings are available after the game has run once.")
-                .font(.caption).foregroundStyle(.secondary)
-            GroupBox("Game Mode") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Enable during Play, then restore when Deadlock exits", isOn: $model.automaticGameMode)
-                        .disabled(model.running)
-                    HStack {
-                        Button("Choose Apple tool…") { model.chooseGameModeTool() }.disabled(model.running)
-                        Text(model.gameModeTool.isEmpty ? "Uses the selected Xcode's gamepolicyctl" : model.gameModeTool)
-                            .font(.caption).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                    }
-                    HStack {
-                        Button("Check Game Mode") { model.gameMode() }.disabled(model.running)
-                        Button("Play session status") { model.gameMode(["--session"]) }.disabled(model.running)
-                        Button("Recover interrupted Play") { model.gameMode(["--restore-session"]) }.disabled(model.running)
-                        Button("End session and restore") { model.gameMode(["--stop-session"]) }.disabled(model.running)
-                        if model.testingGameMode {
-                            Button("Stop test and restore") { model.stopGameModeTest() }
-                        }
-                    }
-                    Text("Play keeps Game Mode on until the game exits, with no time limit. You can close this manager. The previous system-wide policy is restored afterward. Choose a compatible Apple tool and confirm On in the game HUD.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    DisclosureGroup("Timed diagnostic (separate from Play)") {
-                        HStack {
-                            Button("Test for 5 minutes") { model.gameMode(["--test", "--seconds", "300"]) }.disabled(model.running)
-                            Button("Restore interrupted test") { model.gameMode(["--restore"]) }.disabled(model.running)
-                        }
-                    }.font(.caption)
-                }.padding(5)
-            }
-            DisclosureGroup("Details", isExpanded: $showDetails) {
-                ScrollView {
-                    Text(model.output.isEmpty ? "No operation has run in this window." : model.output)
-                        .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                }.frame(height: 180)
-                    .background(.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-            }
-            Text("Experimental: display compatibility and sustained performance remain under investigation. This local build is ad-hoc signed, not notarized for public distribution.")
-                .font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-        }.frame(minWidth: 800, minHeight: 740)
+                Picker("Mode", selection: $displayMode) {
+                    Text("Borderless").tag("borderless"); Text("Exclusive fullscreen").tag("fullscreen")
+                }
+                HStack {
+                    TextField("Width", text: $displayWidth).frame(width: 80)
+                    Text("×"); TextField("Height", text: $displayHeight).frame(width: 80)
+                    Button("Preview") { model.run(["graphics-preset", "--mode", displayMode, "--width", displayWidth, "--height", displayHeight], label: "Previewing display changes…") }
+                    Button("Apply with Backup") { model.run(["graphics-preset", "--mode", displayMode, "--width", displayWidth, "--height", displayHeight, "--apply"], label: "Saving display settings…") }
+                }
+            }.padding(.top, 8).disabled(model.running)
+        }
+        DisclosureGroup("Wine exit hotfix") {
+            HStack {
+                Button("Check") { model.run(["wine-hotfix"], label: "Verifying Wine exit hotfix…") }
+                Button("Enable") { model.run(["wine-hotfix", "--set", "on"], label: "Enabling verified hotfix…") }
+                Button("Roll Back") { model.run(["wine-hotfix", "--set", "off"], label: "Disabling hotfix…") }
+            }.padding(.top, 8).disabled(model.running)
+        }
+        DisclosureGroup("Timed Game Mode diagnostic") {
+            Button("Test for Five Minutes") { model.gameMode(["--test", "--seconds", "300"]) }
+                .padding(.top, 8).disabled(model.running)
+        }
     }
 }
 
@@ -410,12 +474,12 @@ final class ManagerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     init(presentWindow: Bool = true) { self.presentWindow = presentWindow }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 780),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 940, height: 720),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
         window.title = "Deadlock Manager"
         window.isReleasedWhenClosed = false
-        window.contentMinSize = NSSize(width: 800, height: 740)
+        window.contentMinSize = NSSize(width: 820, height: 640)
         window.contentView = NSHostingView(rootView: ContentView(model: model))
         window.delegate = self
         window.center()

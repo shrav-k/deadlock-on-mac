@@ -10,7 +10,7 @@ struct ManagerLifecycle {
     var testingGameMode: Bool {
         command?.first == "game-mode" && command?.contains("--test") == true
     }
-    var testingDisplay: Bool { command == ["display", "--test-window"] }
+    var testingDisplay: Bool { command?.first == "display" && command?.contains("--test-window") == true }
     var cancellableDiagnostic: Bool { testingGameMode || testingDisplay }
 
     mutating func begin(_ command: [String]) -> Bool {

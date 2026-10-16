@@ -1,5 +1,17 @@
 # Local macOS app preview
 
+Version 0.4.0 organizes the manager into a sidebar:
+
+- **Play:** launch/exit Deadlock, open/exit Windows Steam, display and Game Mode summary.
+- **Settings:** display preparation, automatic Game Mode, FPS cap, collapsed installation controls.
+- **Diagnostics:** fullscreen comparison grid, checks, recording, recovery and experiments.
+
+The bottom operation bar remains visible across pages, with Stop Grid/Restore
+while a diagnostic is active and expandable output. Quit Manager stays in the
+sidebar and standard app menu. Diagnostic cancellation uses a private EOF pipe;
+it does not send termination signals to Wine descendants. Automated AppKit tests
+include a real child process as well as the worker, so cleanup order is exercised.
+
 The SwiftUI app runs the same Python manager as the CLI. Its pinned Apple Silicon
 Python distribution and certificate store are bundled, while Wine, DXMT and Steam
 are downloaded separately. The app never bundles game files or Steam account data.

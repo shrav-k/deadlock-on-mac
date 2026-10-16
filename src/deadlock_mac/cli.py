@@ -204,6 +204,7 @@ def main(argv=None):
     parser.add_argument("--workspace", type=Path, default=REPO.parent,
                         help="Deadlock workspace folder; runtimes, bottles and private state live here")
     parser.add_argument("--profile", default=runtime_catalog["default"])
+    parser.add_argument("--manager-control-stdin", action="store_true", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("bootstrap", help="Check the Mac, install pinned runtimes and set up Windows Steam")
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
@@ -242,6 +243,8 @@ def main(argv=None):
     action.add_argument("--prepare", help="default, external, or a connected display UUID; requires Steam closed")
     action.add_argument("--clear", action="store_true", help="Stop managing display selection, preserving current settings")
     action.add_argument("--test-window", action="store_true", help="Show a grid until Escape/Close; Ctrl-C or manager Stop Grid also closes it")
+    p.add_argument("--presentation", choices=("popup", "sdl-desktop"), default="popup",
+                   help="Owned test window only: Win32 popup or SDL fullscreen desktop")
     p.add_argument("--retina", choices=("auto", "on", "off"), default="auto")
     p = sub.add_parser("performance", help="Inspect or change reversible launch settings; Steam must be closed to change them")
     p.add_argument("--fps-cap", type=int)
@@ -320,8 +323,10 @@ def main(argv=None):
                     print(json.dumps(game_mode.restore(tool, receipt), indent=2))
                 else:
                     pid = game_mode.find_game() if args.test else args.test_pid
-                    game_mode.trial(tool, pid, args.seconds, receipt,
-                                    report=lambda message: print(message, flush=True))
+                    from .diagnostic_control import cancellation
+                    with cancellation(sys.stdin if args.manager_control_stdin else None) as stopped:
+                        game_mode.trial(tool, pid, args.seconds, receipt, cancelled=stopped,
+                                        report=lambda message: print(message, flush=True))
             return 0
         if args.command == "profiles":
             folder = workspace / "DeadlockData/profiles"
@@ -355,7 +360,9 @@ def main(argv=None):
                 elif args.clear:
                     result = displays.clear(workspace, profile)
                 elif args.test_window:
-                    result = displays.test_window(workspace, profile)
+                    result = displays.test_window(workspace, profile,
+                                                  control=sys.stdin if args.manager_control_stdin else None,
+                                                  presentation=args.presentation)
                 else:
                     result = displays.status(workspace, profile)
                 print(json.dumps(result, indent=2))

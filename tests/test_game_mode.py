@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -28,6 +29,26 @@ class GameModeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.receipt = Path(self.temp.name).resolve() / 'recovery.json'
+
+    def test_manager_cancel_before_start_never_changes_policy(self):
+        cancelled = threading.Event(); cancelled.set()
+        tool = Tool()
+        with self.assertRaisesRegex(ManagerError, 'cancelled before startup'):
+            game_mode.trial(tool, 42, 300, self.receipt, cancelled=cancelled)
+        self.assertEqual(tool.changes, [])
+        self.assertFalse(self.receipt.exists())
+
+    def test_manager_pipe_cancellation_restores_active_trial(self):
+        cancelled = threading.Event()
+        tool = Tool()
+        def report(_):
+            if tool.policy == 'on': cancelled.set()
+        with patch.object(game_mode, 'process_identity', return_value='start C:\\deadlock.exe'), \
+             patch.object(game_mode.time, 'sleep') as sleep:
+            game_mode.trial(tool, 42, 300, self.receipt, cancelled=cancelled, report=report)
+        sleep.assert_not_called()
+        self.assertEqual(tool.changes, ['on', 'auto'])
+        self.assertFalse(json.loads(self.receipt.read_text())['restore_pending'])
 
     def test_status_distinguishes_actual_mode_and_policy_with_apple_ansi_output(self):
         status = ('Game mode is \x1b[0;32mon\x1b[0;0m.\n'

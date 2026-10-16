@@ -154,6 +154,22 @@ class PreparationTests(unittest.TestCase):
         self.probe.assert_not_called()
 
 class WindowEvidenceTests(unittest.TestCase):
+    def test_partial_log_survives_helper_or_cleanup_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            state = {'guest': {'index': 0, 'bounds': [0, 0, 1512, 982]}}
+            def failed(*args, **kwargs):
+                kwargs['capture']('test_window=0,0,1512,982\n')
+                raise ManagerError('cleanup failed')
+            with patch.object(displays, 'validate_launch', return_value=state), \
+                 patch.object(displays, 'probe', side_effect=failed):
+                with self.assertRaisesRegex(ManagerError, 'Partial diagnostic saved'):
+                    displays.test_window(root, {'id': 'test'})
+            log = next(root.rglob('*.log'))
+            self.assertIn('test_window=0,0,1512,982', log.read_text())
+            self.assertIn('diagnostic_error=cleanup failed', log.read_text())
+            self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+
     def test_actual_clicks_and_focus_cycle_are_distinct_from_geometry(self):
         metadata = 'test_window=1512,-458,4072,982 client=2560x1440 buffer=2560x1440\nwindow_active=1\ntest_window_closed=yes result=0\n'
         evidence = displays.window_observations(metadata, [2560, 1440])

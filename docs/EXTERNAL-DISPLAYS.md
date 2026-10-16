@@ -1,5 +1,35 @@
 # External displays, runtime research and performance plan
 
+## Current workflow (0.4.0 candidate)
+
+The sidebar separates **Play**, **Settings** and **Diagnostics**. In Settings,
+choose a connected display and **Apply Display** with Windows Steam closed.
+In Diagnostics, select **Win32 borderless popup** or **SDL fullscreen desktop**,
+then **Start Test Grid**. Stop Grid stays accessible in the bottom operation bar
+on every page. Both tests retain the host desktop mode and arrangement; neither
+is an exclusive display-mode switch. SDL's explicit fullscreen-desktop state is
+not proof of native macOS fullscreen, hidden menu bar or direct Metal presentation.
+
+The late 0.3.1 LG check did produce a visible grid. The user confirmed edges,
+corner click alignment, Command–Tab and Stop Grid, except that the macOS menu bar
+remained visible with the pointer centered. Its completed log was missing, so
+those observations are user reports, not saved click-event evidence. The actual
+game menu was not retested. Version 0.4.0 saves partial output before cleanup can
+fail and replaces manager process-group termination with a cooperative pipe.
+
+Built-in-only qualification can check both Wine scaling policies, popup versus
+SDL fullscreen desktop, pixel/client dimensions, pointer alignment, app switching,
+menu-bar behavior, repeated start/exit and manager cancellation. It cannot qualify
+secondary placement, mixed-DPI layouts, HDMI refresh/VRR, lid changes, hotplug or
+external GPU workload. Gameplay remains a separate test stage.
+
+SDL documents fullscreen desktop as the default fullscreen transition, with
+exclusive modes selected separately. The new helper uses a null fullscreen mode,
+waits for the transition, checks the fullscreen flag, and records geometry after
+startup rather than treating an accepted request as visual success.
+[SDL fullscreen](https://wiki.libsdl.org/SDL3/SDL_SetWindowFullscreen),
+[SDL fullscreen mode](https://wiki.libsdl.org/SDL3/SDL_SetWindowFullscreenMode).
+
 ## Display picker in 0.3.0
 
 The manager now has **Play on**, **Retina scaling**, **Prepare display**, and

@@ -424,4 +424,10 @@ python3 packaging/check_display_control.py --workspace .. --profile highball
 
 141 Python tests, 12 native AppKit lifecycle scenarios, the display model,
 activation eligibility and lifecycle policy tests pass locally. Actual LG grid
-coverage/clicks/Command–Tab, game menu placement and button exit are pending.
+coverage/clicks/Command–Tab, game menu placement and button exit were pending at that checkpoint.
+
+Follow-up 0.3.1 user acceptance: the grid appeared on the LG and its edges, corner
+click alignment, Command–Tab and Stop Grid worked. The macOS menu bar remained
+visible while the pointer was centered. Worker/helper/server processes ended,
+but no completed log was saved; do not attribute old 0.3.0 events to this run.
+Game-menu acceptance on the LG remains pending.

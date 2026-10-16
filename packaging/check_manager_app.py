@@ -9,19 +9,32 @@ import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
-WORKER = '''import pathlib, signal, sys, time
+WORKER = r'''import pathlib, subprocess, sys, time
+from deadlock_mac.diagnostic_control import cancellation
 root = pathlib.Path(sys.argv[sys.argv.index('--workspace') + 1])
-def restored(*unused):
-    (root / 'worker-finished').write_text('restored')
-    print('worker cleanup complete', flush=True)
-    sys.exit(0)
-signal.signal(signal.SIGTERM, restored)
-print('worker started', flush=True)
-time.sleep(1.2)
-(root / 'worker-finished').write_text('success')
+if '--manager-control-stdin' in sys.argv:
+    with cancellation(sys.stdin) as stopped:
+        # A real descendant is essential: Foundation Process.terminate used to
+        # terminate the helper too, bypassing its pipe-driven cleanup.
+        child = subprocess.Popen([sys.executable, '-c',
+            "import signal,sys; signal.signal(signal.SIGTERM, lambda *_: sys.exit(71)); "
+            "sys.stdin.read(); print('child closed through pipe', flush=True)"], stdin=subprocess.PIPE)
+        print('worker started', flush=True)
+        if not stopped.wait(5):
+            child.kill()
+            sys.exit(72)
+        child.stdin.close()
+        if child.wait(timeout=2) != 0:
+            sys.exit(73)
+        (root / 'worker-finished').write_text('restored')
+else:
+    print('worker started', flush=True)
+    time.sleep(1.2)
+    (root / 'worker-finished').write_text('success')
 print('worker cleanup complete', flush=True)
 sys.exit(9 if sys.argv[-1] == 'failure' else 0)
 '''
+
 
 
 def main():
@@ -35,7 +48,7 @@ def main():
         binary.parent.mkdir(parents=True)
         (resources / 'python/bin').mkdir(parents=True)
         (resources / 'python/bin/python3').symlink_to(Path(sys.executable).resolve())
-        (resources / 'launcher.py').write_text(WORKER)
+        (resources / 'launcher.py').write_text('import sys; sys.path.insert(0, ' + repr(str(REPO / 'src')) + ')\n' + WORKER)
         with (app / 'Contents/Info.plist').open('wb') as stream:
             plistlib.dump({'CFBundleExecutable': binary.name, 'CFBundlePackageType': 'APPL',
                           'CFBundleIdentifier': 'dev.shrav-k.deadlock-manager.integration-tests'}, stream)
@@ -47,7 +60,7 @@ def main():
                         str(REPO / 'tests/native/manager_app_test.swift'), '-o', str(binary)], check=True)
         for scenario in ('idle-close', 'success-close', 'success-quit', 'failure-close',
                          'failure-quit', 'failure-close-retry-quit', 'diagnostic-close',
-                         'diagnostic-quit', 'diagnostic-before-spawn', 'grid-close', 'grid-quit', 'grid-before-spawn'):
+                         'diagnostic-quit', 'diagnostic-before-spawn', 'grid-close', 'grid-quit', 'grid-before-spawn', 'grid-stop'):
             workspace = root / scenario
             workspace.mkdir()
             env = dict(os.environ, NSUnbufferedIO='YES')

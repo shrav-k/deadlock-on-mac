@@ -112,7 +112,9 @@ def restore(tool, receipt):
     return current
 
 
-def trial(tool, pid, seconds, receipt, report=print):
+def trial(tool, pid, seconds, receipt, report=print, cancelled=None):
+    if cancelled is not None and cancelled.is_set():
+        raise ManagerError("Game Mode diagnostic cancelled before startup.")
     if type(seconds) is not int or not 1 <= seconds <= 900:
         raise ManagerError("Game Mode tests must last between 1 and 900 seconds.")
     receipt = no_symlinks(receipt)
@@ -148,7 +150,7 @@ def trial(tool, pid, seconds, receipt, report=print):
             raise ManagerError("Apple's tool did not confirm Game Mode on.")
         report(f"Game Mode is on for a test of at most {seconds} seconds. Check Deadlock's HUD. Ctrl-C ends and restores the test.")
         deadline = time.monotonic() + seconds
-        while not stopped and time.monotonic() < deadline and process_identity(pid) == identity:
+        while not stopped and not (cancelled is not None and cancelled.is_set()) and time.monotonic() < deadline and process_identity(pid) == identity:
             time.sleep(min(1, max(0, deadline - time.monotonic())))
     finally:
         try:

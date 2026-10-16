@@ -30,6 +30,7 @@ struct ManagerAppTests {
                     let text = try! String(contentsOf: marker, encoding: .utf8)
                     precondition(text == (diagnostic ? "restored" : "success"))
                     precondition(delegate.model.output.contains("worker cleanup complete"))
+                    if diagnostic { precondition(delegate.model.output.contains("child closed through pipe")) }
                 }
                 print("PASS \(scenario)")
             }
@@ -43,7 +44,9 @@ struct ManagerAppTests {
             }
             let request = {
                 requested = true
-                if scenario.contains("close") {
+                if scenario == "grid-stop" {
+                    delegate.model.stopDisplayTest()
+                } else if scenario.contains("close") {
                     // Use the actual AppKit close button, not just the policy object.
                     delegate.window!.standardWindowButton(.closeButton)!.performClick(nil)
                 } else {
@@ -64,6 +67,11 @@ struct ManagerAppTests {
             // outcome is a visible startup failure, not a claimed restoration.
             let cancelledBeforeStart = scenario.contains("before-spawn")
                 && !FileManager.default.fileExists(atPath: marker.path)
+            if scenario == "grid-stop" {
+                precondition(requested && !delegate.model.running)
+                app.terminate(nil)
+                return
+            }
             if shouldFail || cancelledBeforeStart {
                 precondition(requested && !delegate.model.running)
                 precondition(delegate.model.operationStartedAt == nil)

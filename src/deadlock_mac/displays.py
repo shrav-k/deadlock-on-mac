@@ -110,7 +110,8 @@ def require_supported(profile):
         raise ManagerError('Display preparation currently supports the qualified Highball Wine runtime only.')
 
 
-def probe(profile, *, window_index=None, allow_running=False, stopped=None, report=print):
+def probe(profile, *, window_index=None, allow_running=False, stopped=None, report=print,
+          capture=lambda line: None, presentation='popup'):
     """Start only a diagnostic in an otherwise closed bottle and end it normally."""
     from .game_session import processes_in_prefix
     running = wine_processes_running()
@@ -126,10 +127,14 @@ def probe(profile, *, window_index=None, allow_running=False, stopped=None, repo
                'Z:' + str(sdl_path(profile)).replace('/', '\\')]
     if window_index is not None:
         command += ['--window-index', str(window_index)]
+        if presentation == 'sdl-desktop':
+            command += ['--sdl-desktop']
+        elif presentation != 'popup':
+            raise ManagerError('Unknown display test presentation.')
     try:
         if window_index is not None:
             from .display_test import run
-            result = run(command, env=env, cwd=profile['prefix'], stopped=stopped, report=report)
+            result = run(command, env=env, cwd=profile['prefix'], stopped=stopped, report=report, capture=capture)
         else:
             result = subprocess.run(command, env=env, cwd=profile['prefix'], capture_output=True,
                                     text=True, timeout=45)
@@ -144,7 +149,7 @@ def probe(profile, *, window_index=None, allow_running=False, stopped=None, repo
             subprocess.run([str(Path(profile['runtime']) / 'bin/wineserver'), '-w'], env=env,
                            capture_output=True, timeout=20, check=True)
     if result.returncode:
-        raise ManagerError('Display diagnostic failed: ' + result.stderr[-2000:])
+        raise ManagerError(f'Display diagnostic failed (code {result.returncode}): ' + (result.stdout + result.stderr)[-2000:])
     return result.stdout
 
 
@@ -231,20 +236,30 @@ def clear(workspace, profile):
     return {'note': 'Display management disabled. Current game resolution and Wine Retina setting were preserved; use the game settings to change them.'}
 
 
-def test_window(workspace, profile):
+def test_window(workspace, profile, *, control=None, presentation='popup'):
     from .display_test import cancellation
-    with cancellation() as stopped:
+    with cancellation(control) as stopped:
         state = validate_launch(workspace, profile, live=False)
         if not state:
             raise ManagerError('Prepare a display before running the test window.')
-        print('The grid stays open until Escape, Close, or Stop Grid. No gameplay starts.', flush=True)
-        output = probe(profile, window_index=state['guest']['index'], stopped=stopped)
-    if topology(host_inventory()) != state['topology']:
-        raise ManagerError('Display arrangement changed during the test. Prepare it again.')
-    folder = private_dir(Path(workspace) / 'DeadlockData/display-tests' / profile['id'])
-    from datetime import datetime, timezone
-    log = folder / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '.log')
-    log.write_text(output); log.chmod(0o600)
+        folder = private_dir(Path(workspace) / 'DeadlockData/display-tests' / identifier(profile['id']))
+        from datetime import datetime, timezone
+        log = folder / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '.log')
+        with log.open('x') as stream:
+            log.chmod(0o600)
+            def capture(line):
+                stream.write(line)
+                stream.flush()
+            print(f'The grid stays open until Escape, Close, or Stop Grid. No gameplay starts. Log: {log}', flush=True)
+            capture(f'presentation={presentation}\n')
+            try:
+                output = probe(profile, window_index=state['guest']['index'], stopped=stopped,
+                               capture=capture, presentation=presentation)
+                if topology(host_inventory()) != state['topology']:
+                    raise ManagerError('Display arrangement changed during the test. Prepare it again.')
+            except Exception as exc:
+                capture(f'diagnostic_error={exc}\n')
+                raise ManagerError(f'{exc}\nPartial diagnostic saved: {log}') from exc
     return {'log': str(log), 'output': output,
             'observations': window_observations(output, state['guest']['bounds'][2:]),
             'visual_verification': 'Requires actual coverage, HUD size and Command–Tab confirmation; API coordinates alone are insufficient.'}

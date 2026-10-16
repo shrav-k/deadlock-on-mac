@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 — development
+
+- Replace the long control panel with Play, Settings and Diagnostics sidebar pages.
+  Keep Stop/Restore and operation feedback visible across pages. Preserve the
+  existing Steam-only launch and exit commands and manager quit lifecycle.
+- Cancel diagnostics through a private manager-to-worker pipe rather than a
+  process-group signal. Test actual AppKit close/quit/Stop with a child process
+  that must acknowledge pipe closure; parent loss uses the same close request.
+- Save grid output incrementally, including stderr and partial failure logs.
+- Add an opt-in SDL fullscreen-desktop grid using the installed game's SDL3 and
+  the same D3D11 renderer as the popup baseline. It retains the current desktop
+  mode, reports settled geometry and does not prove exclusive-fullscreen support.
+- Built-in visual qualification is in progress; external-display and gameplay
+  tests remain pending. No fullscreen or performance fix is claimed yet.
+
 ## 0.3.1 — development
 
 - Respond to Wine's cooperative activation request after manager-initiated Play,

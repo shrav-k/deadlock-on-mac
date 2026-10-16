@@ -17,6 +17,9 @@ static unsigned monitor_count;
 static bool close_window;
 static const char *close_reason = "error";
 static LONG control_result;
+static WNDPROC original_window_proc;
+static void (__cdecl *pump_sdl)(void);
+static void (__cdecl *flush_sdl)(uint32_t, uint32_t);
 
 /* Inherited Unix stdin pipes are not named pipes in Wine. ReadFile works on
  * these handles; PeekNamedPipe may not. Keep the blocking read off the UI thread. */
@@ -60,21 +63,16 @@ static LRESULT CALLBACK window_proc(HWND window, UINT msg, WPARAM a, LPARAM b)
         printf("pointer_click=%d,%d\n", GET_X_LPARAM(b), GET_Y_LPARAM(b)); fflush(stdout);
     }
     if (msg == WM_ACTIVATE) { printf("window_active=%u\n", LOWORD(a) != WA_INACTIVE); fflush(stdout); }
-    return DefWindowProcW(window, msg, a, b);
+    return original_window_proc ? CallWindowProcW(original_window_proc, window, msg, a, b)
+                                : DefWindowProcW(window, msg, a, b);
 }
 
 /* Owned diagnostic window, no interaction with another process. No mode switch,
  * cursor capture or always-on-top flag. Escape/Close or parent pipe EOF closes it.
  * There is no timer that can expire before the user sees the window. */
-static int window_test(int x, int y, int width, int height)
+static int render_test(HWND window, int width, int height)
 {
     if (width < 640 || height < 480 || width > 7680 || height > 4320) return 1;
-    WNDCLASSW wc = {0}; wc.lpfnWndProc = window_proc; wc.hInstance = GetModuleHandleW(NULL);
-    wc.lpszClassName = L"DeadlockDisplayTest"; wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    if (!RegisterClassW(&wc)) return 1;
-    HWND window = CreateWindowW(wc.lpszClassName, L"Deadlock display test — Escape to close", WS_POPUP,
-                                x, y, width, height, NULL, NULL, wc.hInstance, NULL);
-    if (!window) return 1;
     DXGI_SWAP_CHAIN_DESC desc = {0};
     desc.BufferDesc.Width = width; desc.BufferDesc.Height = height;
     desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; desc.SampleDesc.Count = 1;
@@ -106,6 +104,8 @@ static int window_test(int x, int y, int width, int height)
         D3D11_TEXTURE2D_DESC texture; ID3D11Texture2D_GetDesc(buffer, &texture);
         printf("test_window=%ld,%ld,%ld,%ld client=%ldx%ld buffer=%ux%u\n", rect.left, rect.top,
                rect.right, rect.bottom, client.right, client.bottom, texture.Width, texture.Height); fflush(stdout);
+        printf("window_active=%u\n", GetForegroundWindow() == window); fflush(stdout);
+        ULONGLONG next_geometry = GetTickCount64() + 1500;
         while (!close_window) {
             int control = control_state();
             if (control) {
@@ -113,8 +113,21 @@ static int window_test(int x, int y, int width, int height)
                 close_reason = failed ? "control_error" : "parent_closed";
                 break;
             }
-            MSG message;
-            while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
+            if (pump_sdl) {
+                pump_sdl();
+                /* Native messages above record input for this owned HWND. No
+                 * SDL event structs/ABI offsets are guessed or retained. */
+                flush_sdl(0, 0xffff);
+            } else {
+                MSG message;
+                while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
+            }
+            if (GetTickCount64() >= next_geometry) {
+                GetWindowRect(window, &rect); GetClientRect(window, &client);
+                printf("settled_window=%ld,%ld,%ld,%ld client=%ldx%ld\n", rect.left, rect.top,
+                       rect.right, rect.bottom, client.right, client.bottom); fflush(stdout);
+                next_geometry = GetTickCount64() + 5000;
+            }
             ID3D11DeviceContext_UpdateSubresource(context, (ID3D11Resource *)buffer, 0, NULL, pixels, width * 4, 0);
             hr = IDXGISwapChain_Present(chain, 1, 0);
             if (FAILED(hr)) { failed = 1; break; }
@@ -126,8 +139,80 @@ static int window_test(int x, int y, int width, int height)
     if (chain) IDXGISwapChain_Release(chain);
     if (context) ID3D11DeviceContext_Release(context);
     if (device) ID3D11Device_Release(device);
-    DestroyWindow(window);
     printf("test_window_closed=yes result=%d reason=%s\n", failed, close_reason); fflush(stdout);
+    return failed;
+}
+
+static int window_test(int x, int y, int width, int height)
+{
+    WNDCLASSW wc = {0}; wc.lpfnWndProc = window_proc; wc.hInstance = GetModuleHandleW(NULL);
+    wc.lpszClassName = L"DeadlockDisplayTest"; wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    if (!RegisterClassW(&wc)) return 1;
+    HWND window = CreateWindowW(wc.lpszClassName, L"Deadlock display test — Escape to close", WS_POPUP,
+                                x, y, width, height, NULL, NULL, wc.hInstance, NULL);
+    if (!window) return 1;
+    int failed = render_test(window, width, height);
+    DestroyWindow(window);
+    return failed;
+}
+
+/* SDL fullscreen desktop uses the current mode. This is deliberately separate
+ * from exclusive fullscreen and does not change the macOS display arrangement.
+ * Public SDL3 exports are taken from the installed game's DLL, not a second SDL. */
+static int sdl_window_test(HMODULE module, int x, int y, int width, int height)
+{
+    typedef struct SDL_Window SDL_Window;
+#define SDL_API(ret, name, args) \
+    ret (__cdecl *name) args = (void *)GetProcAddress(module, #name); \
+    if (!name) { fprintf(stderr, "Missing SDL3 export: %s\n", #name); return 2; }
+    SDL_API(SDL_Window *, SDL_CreateWindow, (const char *, int, int, uint64_t));
+    SDL_API(bool, SDL_SetWindowPosition, (SDL_Window *, int, int));
+    SDL_API(bool, SDL_SetWindowFullscreenMode, (SDL_Window *, const void *));
+    SDL_API(bool, SDL_SetWindowFullscreen, (SDL_Window *, bool));
+    SDL_API(bool, SDL_ShowWindow, (SDL_Window *));
+    SDL_API(bool, SDL_SyncWindow, (SDL_Window *));
+    SDL_API(uint64_t, SDL_GetWindowFlags, (SDL_Window *));
+    SDL_API(uint32_t, SDL_GetWindowProperties, (SDL_Window *));
+    SDL_API(void *, SDL_GetPointerProperty, (uint32_t, const char *, void *));
+    SDL_API(void, SDL_DestroyWindow, (SDL_Window *));
+    SDL_API(void, SDL_PumpEvents, (void));
+    SDL_API(void, SDL_FlushEvents, (uint32_t, uint32_t));
+    SDL_API(const char *, SDL_GetError, (void));
+#undef SDL_API
+    /* SDL_WINDOW_HIDDEN=0x8; SDL_WindowFlags is Uint64 in SDL3. */
+    SDL_Window *sdl = SDL_CreateWindow("Deadlock SDL fullscreen desktop — Escape to close", width, height, 0x8);
+    if (!sdl) { fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError()); return 1; }
+    HWND window = SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "SDL.window.win32.hwnd", NULL);
+    int failed = !window;
+    if (!failed) {
+        original_window_proc = (WNDPROC)SetWindowLongPtrW(window, GWLP_WNDPROC, (LONG_PTR)window_proc);
+        failed = !original_window_proc;
+    }
+    if (!failed) {
+        failed = !(SDL_SetWindowPosition(sdl, x, y) && SDL_SyncWindow(sdl) &&
+                   SDL_SetWindowFullscreenMode(sdl, NULL) && SDL_SetWindowFullscreen(sdl, true) &&
+                   SDL_ShowWindow(sdl) && SDL_SyncWindow(sdl));
+        printf("sdl_fullscreen_request=%s flags=%llu\n", failed ? "failed" : "accepted",
+               (unsigned long long)SDL_GetWindowFlags(sdl)); fflush(stdout);
+        if (!failed && !(SDL_GetWindowFlags(sdl) & 1)) {
+            fprintf(stderr, "SDL did not enter fullscreen state\n"); failed = 1;
+        }
+        if (failed) fprintf(stderr, "SDL fullscreen: %s\n", SDL_GetError());
+    }
+    if (!failed) {
+        RECT client;
+        if (!GetClientRect(window, &client) || client.right != width || client.bottom != height) {
+            fprintf(stderr, "SDL client differs from selected display; refusing a stretched grid\n");
+            failed = 1;
+        } else {
+            pump_sdl = SDL_PumpEvents; flush_sdl = SDL_FlushEvents;
+            failed = render_test(window, width, height);
+            pump_sdl = NULL; flush_sdl = NULL;
+        }
+    }
+    if (original_window_proc) SetWindowLongPtrW(window, GWLP_WNDPROC, (LONG_PTR)original_window_proc);
+    original_window_proc = NULL;
+    SDL_DestroyWindow(sdl);
     return failed;
 }
 
@@ -192,7 +277,8 @@ int wmain(int argc, wchar_t **argv)
         return state == 1 ? 0 : 1;
     }
     int selected = -1;
-    if (argc == 5 && !wcscmp(argv[2], L"--window-index") && !wcscmp(argv[4], L"--control-stdin")) {
+    bool sdl_desktop = argc == 6 && !wcscmp(argv[4], L"--sdl-desktop");
+    if ((argc == 5 || sdl_desktop) && !wcscmp(argv[2], L"--window-index") && !wcscmp(argv[argc - 1], L"--control-stdin")) {
         wchar_t *end; long value = wcstol(argv[3], &end, 10);
         if (*end || value < 0 || value >= 32) return 2;
         selected = (int)value;
@@ -237,7 +323,11 @@ int wmain(int argc, wchar_t **argv)
         printf("sdl index=%d instance=%u primary=%u name=%s device=%ls bounds=%d,%d,%d,%d\n",
                i, ids[i], ids[i] == SDL_GetPrimaryDisplay(), name, info.szDevice,
                rect.x, rect.y, rect.w, rect.h);
-        if (selected == i) failed |= window_test(rect.x, rect.y, rect.w, rect.h);
+        if (selected == i) {
+            printf("presentation=%s\n", sdl_desktop ? "sdl-desktop" : "popup"); fflush(stdout);
+            failed |= sdl_desktop ? sdl_window_test(module, rect.x, rect.y, rect.w, rect.h)
+                                  : window_test(rect.x, rect.y, rect.w, rect.h);
+        }
     }
     SDL_free(ids);
     SDL_Quit();
