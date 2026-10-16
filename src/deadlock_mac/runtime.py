@@ -106,6 +106,10 @@ def environment(profile, tuning=None):
         gst = support / "GStreamer.framework/Versions/1.0"
         env["DYLD_FALLBACK_LIBRARY_PATH"] = ":".join((str(support), str(gst / "lib"), str(root / "lib/wine/x86_64-unix"),
                                                     str(dxmt / "x86_64-unix"), "/usr/lib"))
+        from .media_runtime import library_directory
+        media = library_directory(profile)
+        if media is not None:
+            env['DYLD_FALLBACK_LIBRARY_PATH'] = str(media) + ':' + env['DYLD_FALLBACK_LIBRARY_PATH']
         env["DYLD_FALLBACK_FRAMEWORK_PATH"] = str(support) + ":/System/Library/Frameworks"
         if gst.is_dir():
             env["GST_PLUGIN_PATH"] = str(gst / "lib/gstreamer-1.0")

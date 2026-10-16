@@ -33,7 +33,10 @@ cd deadlock-on-mac
 ```
 
 Place the repository inside `Projects/Games/Deadlock`. Requires Apple Silicon, macOS 15+,
-Rosetta 2 and Python 3.12+. Review [security boundaries](SECURITY.md), then:
+Rosetta 2 and Python 3.12+. Source setup also needs Apple's Command Line Tools to
+build pinned media libraries. Default Game Mode requires a compatible Apple tool
+from Xcode; setup discovers and validates it automatically. The packaged app
+includes the media payload and needs no compiler. Review [security boundaries](SECURITY.md), then:
 
 ```sh
 python3 bin/deadlock-mac bootstrap
@@ -61,8 +64,9 @@ manager modules. It is currently a local development build, not a notarized down
 For controlled performance tests, see the [60 FPS baseline guide](docs/PERFORMANCE.md).
 Play enables Game Mode using a compatible Apple developer tool, keeps it on for
 the game process's lifetime with **no play-time limit**, then restores the prior
-policy. Choose the tool once in the app; see the installation guide for CLI use,
-recovery and the explicit option to play without it.
+policy. **Check Game Mode Setup** prepares a verified local copy automatically;
+it reports a missing/incompatible Xcode prerequisite before Steam setup. See the
+installation guide for recovery and the explicit option to set up/play without it.
 
 The previously verified M2 Max built-in-display baseline is **Retina, 3024×1964 borderless,
 Direct3D 11, Game Mode On, and game/menu limits of 60 FPS**. The user verified
@@ -87,11 +91,11 @@ is still under validation. See [display setup and limits](docs/EXTERNAL-DISPLAYS
 Projects/Games/Deadlock/
   deadlock-on-mac/    source, tests and documentation only
   Downloads/          verified runtime and Steam installers
-  Runtimes/           active engines, paired renderers, support and hotfixes
+  Runtimes/           active engines, renderers, media/support libraries and hotfixes
   Bottles/            one Windows Steam environment per profile
-  DeadlockData/       private profiles, logs and retained research evidence
+  DeadlockData/       profiles, prepared Apple tool, logs and research evidence
   DeadlockBackups/    local Deadlock data snapshots
-  Tools/              configured Apple Game Mode tool; temporary developer builds
+  Tools/              legacy local tool; temporary developer builds
   Builds/             one current app, one Previous rollback, small build history
 ```
 
@@ -116,6 +120,7 @@ python3 bin/deadlock-mac runtime-dependencies
 ```
 
 - [Runtime research, alternatives and upgrades](docs/RUNTIMES.md)
+- [Matching FFmpeg libraries, packaging and automated media probes](docs/MEDIA-RUNTIME.md)
 - [External displays, hotdesking and performance research](docs/EXTERNAL-DISPLAYS.md)
 - [Wine/CodeWeavers practices and secondary-display investigation](docs/WINE-PRACTICES.md)
 - [Module boundaries, packaging plan and release gates](docs/ARCHITECTURE.md)
@@ -125,8 +130,9 @@ python3 bin/deadlock-mac runtime-dependencies
 - [Security and provenance limitations](SECURITY.md)
 - [Changes from upstream](CHANGELOG.md)
 
-Source code is MIT licensed. Runtime components have their own licenses and are
-downloaded separately. This project is not affiliated with Valve, Apple,
+Manager source code is MIT licensed. Runtime components have their own licenses;
+the app carries a source-inclusive FFmpeg payload and downloads the main runtime
+components separately. This project is not affiliated with Valve, Apple,
 CodeWeavers, WineHQ or Sikarugir. Original upstream attribution is retained in
 [LICENSE](LICENSE) and Git history.
 

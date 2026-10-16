@@ -79,7 +79,7 @@ python3 bin/deadlock-mac retina --set on           # preview
 python3 bin/deadlock-mac retina --set on --apply    # apply; returns backup ID
 # Example for this display only; choose the current display's actual dimensions:
 python3 bin/deadlock-mac graphics-preset --mode borderless --width 3024 --height 1964 --apply
-python3 bin/deadlock-mac launch --game-mode-tool /absolute/path/to/gamepolicyctl
+python3 bin/deadlock-mac launch
 ```
 
 The app exposes Retina status/enable/disable under Display settings. This is
@@ -155,10 +155,11 @@ confirmed it. The user then reported Mina's ultimate staying around 60 FPS with
 the earlier stutter gone. This is a useful short sandbox result, not a sustained
 match benchmark or proof that a Wine process receives every per-game priority.
 
-The optional CLI can inspect the Apple tool selected by Xcode:
+The CLI automatically discovers and validates a compatible Apple tool:
 
 ```sh
 python3 bin/deadlock-mac game-mode
+python3 bin/deadlock-mac game-mode --prepare
 ```
 
 Play enables a background Game Mode session by default; see the
@@ -169,8 +170,10 @@ manager or CLI does not end this watcher. There is no gameplay deadline; the
 three-minute startup timeout only covers a game that never starts. The explicit
 `launch --without-game-mode` path does not require this tool or Xcode. An older tool can
 fail before execution on a newer macOS: Xcode 15's tool failed to load a GamePolicy
-symbol on our macOS 26 machine. Use a compatible Apple developer-tool installation;
-an explicit `--tool /absolute/path/to/gamepolicyctl` is also supported. The manager
+symbol on our macOS 26 machine. Setup skips incompatible copies, checks other
+installed Xcode bundles and caches a verified tool for Play/recovery. If none
+works, install/update Xcode from Apple. An explicit `--tool` override is also
+supported. The manager
 checks Apple's code signature and tool identifier before executing it, rejects
 unknown status formats, and neither downloads nor distributes Apple's binary.
 

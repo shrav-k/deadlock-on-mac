@@ -51,6 +51,13 @@ import Foundation
         defer { model.automaticGameMode = oldGameMode; model.gameModeTool = oldTool }
         model.automaticGameMode = true; model.gameModeTool = "/compatible/apple/tool"
         precondition(model.playArguments == ["launch", "--game-mode-tool", "/compatible/apple/tool"])
+        precondition(model.setupArguments == ["bootstrap", "--game-mode-tool", "/compatible/apple/tool"])
+        let savedSummary = model.displaySummary
+        precondition(!model.preparationCompleted(["game-mode", "--prepare"], success: true))
+        precondition(model.displaySummary == savedSummary)
+        precondition(model.gameModeSetupSummary.contains("Ready:"))
+        precondition(!model.preparationCompleted(["game-mode", "--prepare"], success: false))
+        precondition(model.gameModeSetupSummary.contains("needs attention"))
         precondition(model.gameModeSummary.contains("restore prior policy"))
         model.automaticGameMode = false
         precondition(model.playArguments == ["launch", "--without-game-mode"])

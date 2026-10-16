@@ -226,7 +226,8 @@ def worker(workspace, profile_id, tool_path, response, log):
             else:
                 previous = None
             if previous is None:
-                tool = game_mode.AppleTool(tool_path)
+                prepared = game_mode.prepare_tool(workspace, tool_path)
+                tool = game_mode.AppleTool(prepared['path'])
             if pending_trial(workspace):
                 raise ManagerError("Restore the interrupted diagnostic test with game-mode --restore before Play.")
 

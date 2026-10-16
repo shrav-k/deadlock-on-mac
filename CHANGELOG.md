@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.2 — development
+
+- Package pinned FFmpeg libraries matching Highball's ABI and re-export bindings;
+  verify and install them atomically without changing the original runtime.
+- Add an owned-file decode probe and 32/64-bit Wine media bridge checks in a
+  disposable prefix, plus setup/integrity regression tests. No gameplay required.
+- Discover compatible Apple Game Mode tools automatically and prepare a verified
+  local copy for launch/recovery. Check this prerequisite before Steam setup;
+  provide an explicit opt-out and Xcode setup guidance when unavailable.
+- Keep advanced tool selection optional and separate Game Mode preparation from
+  display preparation. Apple tooling remains an explicit prerequisite on fresh Macs.
+
 ## 0.4.1 — development
 
 - Define workspace ownership/cleanup and record deployment gaps; outline a shared

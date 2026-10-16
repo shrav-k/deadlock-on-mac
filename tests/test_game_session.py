@@ -239,6 +239,33 @@ class GameSessionTests(unittest.TestCase):
                                                  self.root / 'response.json', self.root / 'launch.log'), 0)
         self.assertEqual(session.call_args.kwargs['previous']['original_policy'], 'off')
 
+    def test_new_worker_uses_prepared_tool_for_session_and_recovery(self):
+        cached = self.root / 'cached/gamepolicyctl'
+        tool = Tool(); tool.path = cached
+        with patch.object(game_session, 'state_directory', return_value=self.root), \
+                patch('deadlock_mac.cli.load_profile', return_value=self.profile), \
+                patch.object(game_mode, 'prepare_tool', return_value={'path': str(cached)}) as prepare, \
+                patch.object(game_mode, 'AppleTool', return_value=tool) as constructor, \
+                patch.object(game_session, 'session') as session:
+            self.assertEqual(game_session.worker(self.root, 'highball', None,
+                                                 self.root / 'response.json', self.root / 'launch.log'), 0)
+        prepare.assert_called_once_with(self.root, None)
+        constructor.assert_called_once_with(str(cached))
+        self.assertIs(session.call_args.args[0], tool)
+
+    def test_missing_apple_tool_fails_before_policy_change_or_steam_launch(self):
+        response = self.root / 'response.json'
+        with patch.object(game_session, 'state_directory', return_value=self.root), \
+                patch('deadlock_mac.cli.load_profile', return_value=self.profile), \
+                patch.object(game_mode, 'prepare_tool', side_effect=ManagerError('Install or update Xcode')), \
+                patch.object(game_session, 'session') as session, \
+                patch.object(game_session, 'start') as start:
+            self.assertEqual(game_session.worker(self.root, 'highball', None,
+                                                 response, self.root / 'launch.log'), 1)
+        session.assert_not_called(); start.assert_not_called()
+        self.assertFalse(self.receipt.exists())
+        self.assertFalse(json.loads(response.read_text())['ok'])
+
     def test_cli_play_defaults_to_session_with_explicit_opt_out(self):
         from deadlock_mac.cli import main
         for arguments, automatic in ((['--game-mode-tool', str(Tool.path)], True),

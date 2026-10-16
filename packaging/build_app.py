@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO / "src"))
 from deadlock_mac.storage import download, private_dir, unpack, sha256, no_symlinks, lock, atomic_json
 from deadlock_mac import __version__
 from deadlock_mac import hotfix
+from deadlock_mac import media_runtime
 
 
 def verified_preview(app):
@@ -171,6 +172,11 @@ def build_staged(output, downloads, wine_hotfix=None):
         shutil.copytree(REPO / name, manager / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
     for name in ("LICENSE", "README.md", "SECURITY.md", "CHANGELOG.md"):
         shutil.copyfile(REPO / name, manager / name)
+    media_archive = media_runtime.package(downloads)
+    with tempfile.TemporaryDirectory(prefix='verify-media-') as temporary:
+        media_runtime.verified_archive(media_archive, Path(temporary).resolve() / 'payload')
+    payloads = private_dir(manager / 'runtime-payloads')
+    shutil.copyfile(media_archive, payloads / (media_runtime.specification()['id'] + '.tar.xz'))
     if wine_hotfix is not None:
         spec = hotfix.specification()
         source = hotfix.verify(wine_hotfix, spec)
@@ -206,6 +212,7 @@ def build_staged(output, downloads, wine_hotfix=None):
         raise SystemExit("Bundled manager version differs from the app bundle version.")
     inputs = {"manager_version": __version__, "python": lock, "certificates_sha256": sha256(certificate),
               "wine_hotfix": hotfix.specification() if wine_hotfix is not None else None,
+              "media_runtime": media_runtime.specification(),
               "swift": subprocess.check_output(["/usr/bin/xcrun", "swiftc", "--version"], text=True).strip(),
               "source_files": {str(p.relative_to(REPO)): sha256(p)
                                for p in sorted([p for d in ("src", "bin", "config", "docs", "packaging", "native")

@@ -9,11 +9,98 @@ from pathlib import Path
 import platform
 import re
 import signal
+import shutil
 import subprocess
+import tempfile
 import time
 
 from .runtime import clean_env
-from .storage import ManagerError, atomic_json, no_symlinks
+from .storage import ManagerError, atomic_json, no_symlinks, private_dir, sha256
+
+SETUP_HELP = ("Game Mode needs a compatible Apple-signed gamepolicyctl. Install or update Xcode "
+              "from Apple, then use Check Game Mode Setup again; no file selection or xcode-select "
+              "change is needed. Alternatively explicitly turn off Enable during Play.")
+
+
+def tool_candidates(workspace=None):
+    """Known Apple locations only; never execute tools found on an inherited PATH."""
+    candidates = []
+    if workspace is not None:
+        directory = no_symlinks(Path(workspace) / 'DeadlockData/tools/game-mode')
+        receipt = directory / 'current.json'
+        if receipt.is_file():
+            try:
+                digest = json.loads(no_symlinks(receipt).read_text()).get('sha256', '')
+                if isinstance(digest, str) and re.fullmatch(r'[a-f0-9]{64}', digest):
+                    cached = no_symlinks(directory / digest / 'gamepolicyctl')
+                    if cached.is_file() and sha256(cached) == digest:
+                        candidates.append(cached)
+            except (OSError, ValueError, AttributeError):
+                pass  # Discovery still verifies every other candidate independently.
+        # Migrate the old local diagnostic installation without a file-picker step.
+        candidates.append(Path(workspace) / 'Tools/game-mode-investigation/gamepolicyctl')
+    try:
+        result = subprocess.run(['/usr/bin/xcrun', '--find', 'gamepolicyctl'],
+                                capture_output=True, text=True, timeout=10, env=clean_env())
+        if result.returncode == 0 and Path(result.stdout.strip()).is_absolute():
+            candidates.append(Path(result.stdout.strip()))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    for directory in (Path('/Applications'), Path.home() / 'Applications'):
+        candidates.extend(sorted(directory.glob('Xcode*.app/Contents/Developer/usr/bin/gamepolicyctl')))
+    seen = set()
+    for path in candidates:
+        try:
+            resolved = path.resolve(strict=True)
+        except OSError:
+            continue
+        if resolved not in seen:
+            seen.add(resolved)
+            yield resolved
+
+
+def select_tool(workspace=None):
+    failures = []
+    for path in tool_candidates(workspace):
+        try:
+            tool = AppleTool(path)
+            tool.status()  # A valid Apple signature alone does not imply OS compatibility.
+            return tool
+        except (ManagerError, OSError, subprocess.SubprocessError) as exc:
+            failures.append(f'{path.name}: {exc}')
+    detail = ' No compatible tool passed signature and status checks.' if failures else ''
+    raise ManagerError(SETUP_HELP + detail)
+
+
+def prepare_tool(workspace, path=None):
+    """Keep a verified local copy so an Xcode move/update does not break recovery."""
+    tool = AppleTool(path) if path is not None else select_tool(workspace)
+    before = tool.status()
+    digest = sha256(tool.path)
+    parent = private_dir(Path(workspace) / 'DeadlockData/tools/game-mode')
+    destination = no_symlinks(parent / digest)
+    if not destination.exists():
+        with tempfile.TemporaryDirectory(prefix='.prepare-', dir=parent) as temporary:
+            staged = Path(temporary) / 'payload'; staged.mkdir(mode=0o700)
+            candidate = staged / 'gamepolicyctl'
+            shutil.copyfile(tool.path, candidate); candidate.chmod(0o700)
+            if sha256(candidate) != digest:
+                raise ManagerError('Apple tool changed while preparing it; retry setup.')
+            AppleTool(candidate).status()
+            try:
+                staged.rename(destination)
+            except FileExistsError:
+                pass  # Another preparer may have published the identical digest.
+    cached = no_symlinks(destination / 'gamepolicyctl')
+    if not cached.is_file() or sha256(cached) != digest:
+        raise ManagerError('Prepared Apple tool failed integrity validation; preserve it for inspection.')
+    current = AppleTool(cached).status()
+    if current['policy'] != before['policy']:
+        raise ManagerError('Game Mode policy changed during setup; no policy was set by this operation.')
+    record = {'schema': 1, 'sha256': digest, 'source': str(tool.path),
+              'macos': platform.mac_ver()[0], 'path': str(cached), 'status': current}
+    atomic_json(parent / 'current.json', record)
+    return {'ready': True, 'backend': 'apple-tool', **record}
 
 
 def parse_status(output):
@@ -31,15 +118,11 @@ def parse_status(output):
 
 
 class AppleTool:
-    def __init__(self, path=None):
+    def __init__(self, path=None, workspace=None):
         if platform.system() != "Darwin":
             raise ManagerError("Apple Game Mode diagnostics require macOS.")
         if path is None:
-            result = subprocess.run(["/usr/bin/xcrun", "--find", "gamepolicyctl"],
-                                    capture_output=True, text=True, timeout=10, env=clean_env())
-            if result.returncode:
-                raise ManagerError("No gamepolicyctl found in the selected Xcode. Normal game launch is still available.")
-            path = result.stdout.strip()
+            path = select_tool(workspace).path
         self.path = Path(path).expanduser().resolve(strict=True)
         if not self.path.is_file() or not os.access(self.path, os.X_OK):
             raise ManagerError("gamepolicyctl must be an executable file.")

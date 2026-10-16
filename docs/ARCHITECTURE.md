@@ -78,8 +78,8 @@ Apple's separately licensed D3DMetal. Redistribution of LGPL components needs th
 corresponding source and license obligations satisfied. Packaging must not silently
 change a user's runtime, prefix, Steam account or Cloud-conflict decision.
 
-Game Mode remains independent of the Wine provider. Play uses it by default when
-configured with a compatible, signature-verified Apple tool, with an explicit
+Game Mode remains independent of the Wine provider. Setup discovers and prepares
+a compatible, signature-verified Apple tool; Play uses it by default, with an explicit
 opt-out for ordinary Steam launch. The Apple executable is not bundled. A detached
 isolated Python worker owns a per-user lock and recovery receipt outside the
 workspace, enables the system-wide policy, and asks the existing runtime adapter
@@ -119,8 +119,8 @@ Steam login/Guard and game downloads remain normal first-run steps.
 | --- | --- |
 | Workspace integrity | After cleanup, all 5,641 files/links in the three active runtime components matched pinned archives; the separate exit overlay verified. The bundled CLI found the existing Steam/game install and generated the correct Steam launch command without executing it. |
 | Fresh installation | The app previously bootstrapped Windows Steam in an empty workspace, followed by user login and game installation. On October 16 a fresh download of Valve's installer matched the pinned digest. That check did not repeat setup, account login or gameplay. Repeat the whole flow for the release candidate. |
-| Player dependencies | The preview bundles Python, certificates and display helpers. Game Mode still requires a separately acquired compatible Apple-signed tool; default Play requires configuration or explicit opt-out. Resolve that onboarding/distribution gap before promising the optimized experience out of the box. |
-| Runtime libraries | Direct-import inspection of 31 Unix modules still reports `libavformat.63.dylib`, `libavcodec.63.dylib` and `libavutil.61.dylib` unresolved in `winedmo.so`. Determine whether the selected game's paths require them and qualify any optional fallback. Complete the transitive audit; do not substitute different ABI versions with symlinks. |
+| Player dependencies | The 0.4.2 preview bundles Python, certificates, display helpers and matching FFmpeg. Game Mode discovers compatible Apple tools automatically, checks signature/status before setup and prepares a local copy for Play/recovery. A Mac without one still needs compatible Xcode from Apple or an explicit opt-out; no file selection or global toolchain switch is required. |
+| Runtime libraries | The 0.4.2 fix resolves the three missing FFmpeg imports with a source-inclusive private package. Its x86_64 audio decode and Wine's 64/32-bit media bridges pass; the 31-module direct-import scan has zero unresolved entries. In-game media paths and the broader transitive/plugin audit remain separate qualification work. |
 | Launch/exit | Earlier menu, normal exit, Game Mode restoration and actual manager quit/exit controls have passing observations. A Steam shutdown hang required recovery and has no proven root-cause fix. Record client/game versions and repeat cold-start/update lifecycle checks. |
 | Displays/performance | Built-in Retina borderless has a prior visual pass. The new automatic display policy still needs its visual runs. Exclusive fullscreen and LG game-menu coverage remain unresolved; external gameplay and sustained benchmarks are pending. |
 | Distribution | The current app is ad-hoc signed, not notarized. Complete signing, update/rollback, corresponding-source/license inventory and SBOM work. Source-only bootstrap does not include the exit overlay unless it has been built or supplied. |
@@ -128,8 +128,9 @@ Steam login/Guard and game downloads remain normal first-run steps.
 
 The installed game's manifest reported build `25939744` during the offline audit;
 that does not extend older gameplay acceptance to this build. Cloud and multiplayer
-remain unverified. No Wine, Steam, game or display-grid session was started for
-this cleanup. See the [compatibility ledger](COMPATIBILITY.md) for the underlying
+remain unverified. The initial cleanup started no runtime sessions. The subsequent
+media fix ran owned probes in disposable Wine prefixes, without Steam, Deadlock or
+display grids. See the [compatibility ledger](COMPATIBILITY.md) for the underlying
 historical runs and [quality protocol](QUALITY.md) for promotion criteria.
 
 ## Evolving into a launcher with game recipes

@@ -11,19 +11,23 @@ is available yet.
 | Path | What you need | Sequence |
 | --- | --- | --- |
 | Built local app preview | Apple Silicon, macOS 15+, Rosetta 2, 80 GiB free | Select workspace → Set up Steam → Open Steam → sign in → Install Deadlock → Play |
-| Source checkout | The same, plus Git and Python 3.12+ | Clone the maintained branch, then run the commands below |
+| Source checkout | The same, plus Git, Python 3.12+ and Apple's Command Line Tools for media compilation | Clone the maintained branch, then run the commands below |
 | Build an app yourself | Source prerequisites plus a compatible Swift compiler/macOS SDK | Follow [app packaging](../packaging/README.md), then use the app sequence |
 
 Game Mode during Play is enabled by default and requires a compatible Apple-signed
-`gamepolicyctl`. Select it in the app's Game Mode panel before the first Play. To
+`gamepolicyctl`. Setup discovers, validates and prepares it automatically. On a
+fresh Mac without a compatible copy, install/update Xcode from Apple and retry
+**Check Game Mode Setup**; no file picker or `xcode-select` change is required. To
 play without that tool, turn off **Enable during Play** or use the CLI's
-`launch --without-game-mode`. Installation itself does not require Xcode. On an existing
+`bootstrap --without-game-mode` and `launch --without-game-mode`. The packaged app
+can install and play without Xcode when this preference is explicitly off. On an existing
 working installation, skip setup/download and use Open Steam → Play. Do not
 bootstrap a running Wine environment.
 
 ## Source installation
 
 Requirements: Apple Silicon, macOS 15 or newer, Rosetta 2, Python 3.12 or newer,
+Apple's Command Line Tools for the source-build path,
 and at least 80 GiB free. Current runtime testing is on an M2 Max with macOS 26.6.2.
 Older supported OS versions are not yet tested here. Use macOS's normal Rosetta
 installation flow if needed; this manager does not silently accept its license.
@@ -39,10 +43,11 @@ python3 bin/deadlock-mac bootstrap
 python3 bin/deadlock-mac steam
 ```
 
-`bootstrap` checks the Mac, disk space and Rosetta, then combines runtime installation,
+`bootstrap` checks the Mac, disk space, Rosetta and the selected Game Mode prerequisite,
+then combines runtime installation,
 profile creation and Steam setup. The lower-level `runtime-install`, `profile-create`
 and `setup` commands remain available. Runtime installation fetches the pinned Highball Wine engine and paired DXMT build,
-plus Sikarugir support libraries,
+plus Sikarugir support libraries and matching [FFmpeg libraries](MEDIA-RUNTIME.md),
 checks their hashes, and extracts them under `../Runtimes`. `setup` initializes
 `../Bottles/highball` and installs the official Windows Steam client. Downloads, state,
 game files and backups stay outside this repository. macOS/Wine can still create
@@ -107,8 +112,7 @@ manager does not change which macOS display is main. See the policy below and
 [external-display acceptance status](EXTERNAL-DISPLAYS.md). Exclusive fullscreen
 1920×1200 still has coverage and focus failures on the tested Mac.
 
-Configure the compatible Game Mode tool below, then use manager **Play** (CLI:
-`launch --game-mode-tool /absolute/path/to/gamepolicyctl`). Confirm the HUD's
+Complete Game Mode setup below, then use manager **Play** (CLI: `launch`). Confirm the HUD's
 output dimensions and Game Mode On, and both in-game limits at 60. The user
 verified these checks, screen coverage, pointer alignment and Command–Tab after
 a full Steam restart. Gameplay performance at 3024×1964 has not yet been measured.
@@ -178,13 +182,21 @@ Use a `gamepolicyctl` from a compatible Apple developer-tool installation. A ful
 Xcode installation is only relevant to obtaining that tool; it is not a
 game runtime dependency. Xcode 15's copy crashes on the tested macOS 26, so merely
 finding the filename is insufficient. The manager verifies Apple's signature,
-then checks whether the tool can actually report status. It does not redistribute
-or automatically download the binary.
+then checks whether the tool can actually report status. Discovery checks a
+prepared copy, the earlier workspace tool, selected Xcode and Xcode bundles in
+`/Applications` or `~/Applications`, skipping incompatible copies. Setup preserves
+a verified copy under `DeadlockData/tools/game-mode/<digest>/gamepolicyctl` and
+checks it again after OS updates. It does not redistribute or download Apple's
+binary. Apple's daemon rejected our unentitled native probe, so a custom helper
+is not a supported substitute for this prerequisite.
 
 In the app's **Game Mode** panel:
 
-1. **Choose Apple tool…** if the selected Xcode's tool is absent or incompatible.
-2. **Check Game Mode** to read the policy without changing it.
+1. **Check Game Mode Setup** to discover, validate and prepare the tool. Set Up
+   Steam also performs this check before downloading runtimes or starting Wine.
+2. If unavailable, use **Get Xcode from Apple**, install a compatible release and
+   check again. **Advanced tool override** is optional; **Use Automatic** clears
+   an old manual choice. Setup does not change the Game Mode policy.
 3. Leave **Enable during Play, then restore when Deadlock exits** checked.
 4. Hit **Play**. Confirm **Game Mode On** in Deadlock's Metal HUD. You can close the
    manager; its detached watcher keeps running until the actual game process exits.
@@ -195,16 +207,21 @@ In the app's **Game Mode** panel:
 The equivalent source commands are:
 
 ```sh
-python3 bin/deadlock-mac game-mode --tool /absolute/path/to/gamepolicyctl
-python3 bin/deadlock-mac launch --game-mode-tool /absolute/path/to/gamepolicyctl
+python3 bin/deadlock-mac game-mode --prepare
+python3 bin/deadlock-mac launch
 python3 bin/deadlock-mac game-mode --session
 ```
 
-Omit the tool argument only if the selected Xcode supplies a compatible copy.
-The app remembers your selection; source CLI invocations need the explicit argument
-each time when the selected Xcode's copy is incompatible. If the tool cannot be
+Normal CLI/app launches use automatic discovery. Advanced `--tool` or
+`--game-mode-tool` overrides remain available. A new Play session prepares its
+verified copy before changing policy, so moving Xcode does not remove the worker's
+recovery tool. An active/interrupted session still uses its recorded tool. If it cannot be
 verified or enabled, Play reports the error before asking Steam to launch; it does
 not silently claim Game Mode is working. Use `--without-game-mode` as the explicit fallback.
+For setup without forced Game Mode, uncheck **Enable during Play** before **Set Up
+Steam**, or use `bootstrap --without-game-mode`. Missing Xcode never silently
+changes that preference. Fully automatic forced Game Mode on a Mac with no Apple
+tool remains unavailable; this dependency is an explicit setup prerequisite.
 
 Normal Play has **no five-minute or other gameplay deadline**. A three-minute
 startup timeout applies only while waiting for a game process: finish Steam's

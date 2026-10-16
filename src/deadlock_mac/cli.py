@@ -21,6 +21,7 @@ from . import game_mode
 from . import game_session
 from . import game_exit
 from . import hotfix
+from . import media_runtime
 from . import benchmark
 from . import wine_display
 from . import displays
@@ -52,6 +53,8 @@ def install_runtimes(workspace, family="highball"):
         atomic_json(receipt, {"schema": 1, "artifact": name, "archive_sha256": artifact["sha256"],
                               "url": artifact["url"], "installed_utc": timestamp()})
         print(f"Installed: {destination}")
+    if media_runtime.install(workspace, family) is not None:
+        print('Verified matching FFmpeg media libraries.')
 
 
 def verify_runtimes(workspace, family):
@@ -61,6 +64,10 @@ def verify_runtimes(workspace, family):
         count = verify_extracted(archive, workspace / "Runtimes" / name,
                                  include=artifact.get("include"), exclude=artifact.get("exclude", ()))
         print(f"Verified {name}: {count} files/links match the pinned archive.")
+    spec = media_runtime.specification()
+    if runtime_set(family)['wine'] == spec['runtime_version']:
+        media_runtime.verify(workspace / 'Runtimes' / spec['id'])
+        print('Verified FFmpeg media libraries and corresponding source.')
 
 
 def timestamp():
@@ -142,10 +149,13 @@ def setup(workspace, profile):
     print(f"Steam is installed. Run steam and sign into your existing account. Setup log: {logfile}")
 
 
-def bootstrap(workspace, name, family):
+def bootstrap(workspace, name, family, game_mode_tool=None, without_game_mode=False):
     preflight(workspace, family)
     if wine_processes_running():
         raise ManagerError("Exit Windows Steam and all Wine bottles before setup. Use Open Steam or Play for an existing installation.")
+    if not without_game_mode:
+        game_mode.prepare_tool(workspace, game_mode_tool)
+        print('Game Mode is ready: compatible Apple tool discovered, verified and prepared automatically.', flush=True)
     path = profile_file(workspace, name)
     if path.exists():
         profile = load_profile(workspace, name)
@@ -208,6 +218,8 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("bootstrap", help="Check the Mac, install pinned runtimes and set up Windows Steam")
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
+    p.add_argument('--game-mode-tool', type=Path, help='Advanced override; normally discovered automatically')
+    p.add_argument('--without-game-mode', action='store_true', help='Explicitly set up without the Apple Game Mode prerequisite')
     p = sub.add_parser("runtime-install", help="Download and verify a pinned free Wine + DXMT pair")
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     p = sub.add_parser("runtime-verify", help="Check installed runtime files against pinned archives")
@@ -273,8 +285,9 @@ def main(argv=None):
     p.add_argument("--start-time", help="Local ISO time when the gameplay segment started (no UTC offset)")
     p.add_argument("--end-time", help="Exclusive local ISO end time, to exclude later menus or settings")
     p = sub.add_parser("game-mode", help="Apple Game Mode status, Play recovery or a bounded diagnostic")
-    p.add_argument("--tool", type=Path, help="Compatible Apple-signed gamepolicyctl; otherwise discover through Xcode")
+    p.add_argument("--tool", type=Path, help="Advanced Apple tool override; otherwise discover a compatible prepared or Xcode tool")
     action = p.add_mutually_exclusive_group()
+    action.add_argument('--prepare', action='store_true', help='Discover, validate and cache a compatible Apple tool without changing policy')
     action.add_argument("--test", action="store_true", help="Find the one running Deadlock process and start a bounded test")
     action.add_argument("--test-pid", type=int, help="Native deadlock.exe PID; temporarily force Game Mode on")
     action.add_argument("--restore", action="store_true", help="Recover the previous automatic policy after an interrupted test")
@@ -302,6 +315,10 @@ def main(argv=None):
                                            args.start_time, args.end_time), indent=2))
             return 0
         if args.command == "game-mode":
+            if args.prepare:
+                with lock(workspace / 'DeadlockData'):
+                    print(json.dumps(game_mode.prepare_tool(workspace, args.tool), indent=2))
+                return 0
             if args.session:
                 print(json.dumps(game_session.status(), indent=2))
                 return 0
@@ -311,7 +328,7 @@ def main(argv=None):
             if args.stop_session:
                 print(json.dumps(game_session.stop_session(), indent=2))
                 return 0
-            tool = game_mode.AppleTool(args.tool)
+            tool = game_mode.AppleTool(args.tool, workspace=workspace)
             if args.test_pid is None and not args.test and not args.restore:
                 print(json.dumps(tool.status(), indent=2))
                 return 0
@@ -380,7 +397,7 @@ def main(argv=None):
                 result = hotfix.status(profile) if args.set is None else hotfix.configure(workspace, profile, args.set == "on")
                 print(json.dumps(result, indent=2))
             elif args.command == "bootstrap":
-                bootstrap(workspace, args.profile, args.runtime)
+                bootstrap(workspace, args.profile, args.runtime, args.game_mode_tool, args.without_game_mode)
             elif args.command == "graphics-preset":
                 print(json.dumps(game_settings.configure(workspace, profile, apply=args.apply,
                                                         mode=args.mode, width=args.width, height=args.height), indent=2))

@@ -46,6 +46,7 @@ final class ManagerModel: ObservableObject {
     @Published var output = ""
     @Published private(set) var operationStartedAt: Date?
     @Published var gameModeTool = UserDefaults.standard.string(forKey: "gameModeTool") ?? ""
+    @Published var gameModeSetupSummary = "Checked automatically during setup. You can also check it here before Play."
     var testingGameMode: Bool { lifecycle.testingGameMode }
     var testingDisplay: Bool { lifecycle.testingDisplay }
     private let activationHandoff = WineActivationHandoff()
@@ -85,6 +86,7 @@ final class ManagerModel: ObservableObject {
         else if !gameModeTool.isEmpty { arguments += ["--game-mode-tool", gameModeTool] }
         return arguments
     }
+    var setupArguments: [String] { ["bootstrap"] + playArguments.dropFirst() }
 
     func refreshDisplays() { run(["display"], label: "Reading connected displays…") }
 
@@ -130,6 +132,22 @@ final class ManagerModel: ObservableObject {
         let tool = gameModeTool.isEmpty ? [] : ["--tool", gameModeTool]
         run(["game-mode"] + tool + arguments,
             label: arguments.contains("--test") ? "Game Mode test running; keep this app open." : "Checking Game Mode…")
+    }
+
+    func preparationCompleted(_ command: [String], success: Bool) -> Bool {
+        if command.first == "game-mode" && command.contains("--prepare") {
+            gameModeSetupSummary = success ? "Ready: compatible Apple tool verified and prepared. Setup left Game Mode policy unchanged." : "Game Mode setup needs attention. See Details; install compatible Xcode if no tool was found."
+            return false
+        }
+        guard command.first == "display", success else { return false }
+        if command.contains("--prepare") {
+            displaySummary = "Display prepared. Open Steam, then Play; check the game menu before gameplay."
+            return !lifecycle.quitPending
+        }
+        if command.contains("--clear") {
+            displaySummary = "Display management is off; current game and Retina settings were preserved."
+        }
+        return false
     }
 
     private func stopDiagnostic() {
@@ -246,13 +264,7 @@ final class ManagerModel: ObservableObject {
                     self.status = code == 0 ? (messages[command.first ?? ""] ?? "Check complete.")
                         : "This step could not finish. See details below (code \(code))."
                     if code == 0 && command == ["display"] { self.readDisplayReport() }
-                    if code == 0 && command.contains("--prepare") {
-                        self.displaySummary = "Display prepared. Open Steam, then Play; check the game menu before gameplay."
-                    }
-                    if code == 0 && command.contains("--clear") {
-                        self.displaySummary = "Display management is off; current game and Retina settings were preserved."
-                    }
-                    let refreshPreparedDisplay = code == 0 && command.contains("--prepare") && !self.lifecycle.quitPending
+                    let refreshPreparedDisplay = self.preparationCompleted(command, success: code == 0)
                     self.finished(success: code == 0)
                     if refreshPreparedDisplay { self.refreshDisplays() }
                 }
@@ -409,10 +421,16 @@ struct ManagerSettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Enable during Play and restore on exit", isOn: $model.automaticGameMode)
                 Text("Recommended on for both laptop and external displays. No play-time limit; the watcher continues after Command–Tab or closing the manager. Turning this preference off affects the next launch and leaves the system policy unchanged.").font(.caption).foregroundStyle(.secondary)
-                DisclosureGroup("Apple tool") {
+                Button("Check Game Mode Setup") { model.gameMode(["--prepare"]) }
+                Text(model.gameModeSetupSummary).font(.caption)
+                Text("Setup automatically finds a compatible Apple tool, verifies it and keeps a local copy. If none is available, install or update Xcode and check again. You do not need to select a file or change your default developer tools.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Link("Get Xcode from Apple", destination: URL(string: "https://apps.apple.com/app/xcode/id497799835")!)
+                DisclosureGroup("Advanced tool override") {
                     HStack {
                         Button("Choose…") { model.chooseGameModeTool() }
-                        Text(model.gameModeTool.isEmpty ? "Selected Xcode toolchain" : model.gameModeTool)
+                        Button("Use Automatic") { model.gameModeTool = ""; UserDefaults.standard.removeObject(forKey: "gameModeTool") }
+                        Text(model.gameModeTool.isEmpty ? "Automatic discovery and compatibility checks" : model.gameModeTool)
                             .font(.caption).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
                     }
                 }
@@ -432,7 +450,7 @@ struct ManagerSettingsView: View {
                 HStack { TextField("Workspace", text: $model.workspace); Button("Choose Folder…") { model.chooseWorkspace() } }
                 TextField("Runtime profile", text: $model.profile)
                 HStack {
-                    Button("Set Up Steam") { model.run(["bootstrap"], label: "Installing verified components and Steam…") }
+                    Button("Set Up Steam") { model.run(model.setupArguments, label: "Checking prerequisites, then installing verified components and Steam…") }
                     Button("Open Steam") { model.run(["steam"], label: "Opening Steam…") }
                     Button("Install Deadlock") { model.run(["install"], label: "Opening Deadlock in Steam…") }
                 }

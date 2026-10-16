@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "ffmpeg-9.0.2-highball-v1",
+  "runtime_version": "highball-wine-20261006",
+  "minimum_macos": "15.0",
+  "libraries": {"libavformat.63.dylib": 63, "libavcodec.63.dylib": 63, "libavutil.61.dylib": 61, "libswresample.7.dylib": 7},
+  "inputs": {
+    "ffmpeg": {
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "filename": "ffmpeg-9.0.2.tar.xz",
+      "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+      "root": "ffmpeg-9.0.2",
+      "license": "LGPL-2.1-or-later with this build configuration"
+    },
+    "nasm": {
+      "url": "https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/nasm-2.16.03.tar.xz",
+      "filename": "nasm-2.16.03.tar.xz",
+      "sha256": "1412a1c760bbd05db026b6c0d1657affd6631cd0a63cddb6f73cc6d4aa616148",
+      "root": "nasm-2.16.03"
+    }
+  },
+  "files": {
+    "lib/libavformat.63.dylib": "c143fe9899acdf68c1fcb477b77a7b6eafb26ddcb36c639aaec4998307a206c9",
+    "lib/libavcodec.63.dylib": "3740a1c73099c04169414e67936140ed0b27e3789ae5ccb7379545697f8af879",
+    "lib/libavutil.61.dylib": "25cd6cde8a31829abd854c8056d7982fe2c9e91aa09ccf34c5dbe6cfedc21d60",
+    "lib/libswresample.7.dylib": "8c3d240184bdf67dce9a08f792bffe615121070fe9f7cd6abc2962eee8b48987"
+  }
+}

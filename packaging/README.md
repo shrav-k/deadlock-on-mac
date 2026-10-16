@@ -12,6 +12,10 @@ Retina follows the selected screen's backing scale, including high-DPI external
 screens. The Game Mode summary describes the launch preference rather than claiming
 a live reading. See [display and Game Mode policy](../docs/INSTALL.md#display-and-game-mode-launch-policy).
 
+Version 0.4.2 includes matching FFmpeg libraries and automatically discovers,
+validates and prepares the compatible Apple Game Mode tool. A missing Xcode
+prerequisite is reported before Steam setup rather than at the first Play click.
+
 The bottom operation bar remains visible across pages, with Stop Grid/Restore
 while a diagnostic is active and expandable output. Quit Manager stays in the
 sidebar and standard app menu. Diagnostic cancellation uses a private EOF pipe;
@@ -96,12 +100,15 @@ timed diagnostic; a failed operation keeps the window open. The app has one mana
 window and remembers the selected workspace/profile. The game watcher remains
 independent of the GUI's lifetime.
 
-The **Game Mode** panel selects a compatible Apple-signed `gamepolicyctl`. With
+The **Game Mode** panel's **Check Game Mode Setup** automatically discovers a
+compatible Apple-signed `gamepolicyctl` and caches a verified local copy. With
 **Enable during Play** checked (the default), Play keeps Game Mode on for the
 actual game process's lifetime, then restores the prior policy. There is no
 play-time limit and the detached watcher survives closing this app. Status,
 explicit end/restore and interrupted-Play recovery controls are included. The
-Apple tool is not bundled; uncheck the option to play without it. The separate
+Apple tool is not bundled: install/update Xcode from Apple when prompted, or
+explicitly uncheck the option to set up and play without it. A manual path is an
+advanced override; no file picker or global `xcode-select` change is required. The separate
 collapsed diagnostic section retains the timed test and its recovery controls.
 See the complete [installation and Game Mode guide](../docs/INSTALL.md).
 
@@ -115,6 +122,16 @@ still requires Developer ID signing/notarization, a complete transitive dependen
 and license inventory, upgrade/recovery testing and the gameplay acceptance gates
 in [architecture](../docs/ARCHITECTURE.md). Bundled Python/Pip license files are
 retained; that alone does not complete the distribution license audit.
+
+## Media dependencies
+
+The builder automatically includes the verified FFmpeg payload described in
+[the media runtime guide](../docs/MEDIA-RUNTIME.md). It builds pinned source with
+Apple's Command Line Tools if the shared download cache has no package. The
+compressed payload preserves reviewed dylib bytes through app signing, contains
+the corresponding FFmpeg source and LGPL notice, and is verified again during
+installation. Players need no Homebrew FFmpeg, NASM or compiler. This payload is
+paired with the Highball runtime version rather than injected into other providers.
 
 ## Include the reviewed exit overlay
 

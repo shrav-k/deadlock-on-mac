@@ -11,22 +11,23 @@ copy of this entire directory. The current local app is
 | --- | --- | --- |
 | `Bottles/` | Windows environments, Steam, installed games, account/session data and game settings | Required for existing installations. Never treat as a cache or remove automatically to reclaim space. |
 | `Runtimes/` | Immutable engines, paired renderers/support libraries and separately verified overlays | Keep everything referenced by an active profile or enabled hotfix. Remove unreferenced comparison installations only after checking live processes and provenance. |
-| `DeadlockData/` | Profiles, preferences, display preparation, recovery records, logs and research receipts | Required state. Only explicitly reviewed historical evidence/logs are eligible for retention cleanup; active session/recovery records are not disposable. |
-| `Tools/` | Locally supplied Apple Game Mode tool and temporary developer build directories | The configured Game Mode tool is required for that launch preference. Compilers/object trees are optional and should be removed after verified outputs and evidence are retained. |
+| `DeadlockData/` | Profiles, preferences, prepared Apple tool, display preparation, recovery records, logs and research receipts | Required state. Only explicitly reviewed historical evidence/logs are eligible for retention cleanup; active session/recovery records and prepared tools are not disposable. |
+| `Tools/` | Legacy locally supplied Apple tool and temporary developer build directories | Preserve legacy paths referenced by settings/recovery. Compilers/object trees are optional and should be removed after verified outputs and evidence are retained. |
 | `DeadlockBackups/` | Small local game-data snapshots with manifests | Recovery data, not a runtime prerequisite. Retain verified copies; never delete the only backup as generic cleanup. |
 | `Builds/` | One current app, one rollback and bounded build receipts | Required to use this local preview. See the [build publication policy](../packaging/README.md); avoid version-named app piles. |
 | `Downloads/` | Hash-checked compressed installers, runtime/source/compiler archives | Re-downloadable cache; not needed to play an already installed profile. Retain pinned inputs needed for offline repair/reproducibility, or prune them explicitly when space matters. Never repin a changed download automatically. |
 | `deadlock-on-mac/` | Maintained source, tests, recipes and documentation | Needed for development/source CLI, not for running the self-contained app. Commit source only, not private workspace data. |
 
-The October 16 installation retains exactly one active bottle and four runtime
+After the 0.4.2 dependency fix, the installation retains one active bottle and five runtime
 directories: Highball Wine, its paired DXMT, Sikarugir support libraries and the
-reviewed Highball exit overlay. These are complementary components, not four game
+reviewed Highball exit overlay, plus matching FFmpeg libraries. These are complementary components, not five game
 installations. Removing the inactive Sikarugir Wine engine does not make its shared
 support libraries redundant.
 
-`Tools/game-mode-investigation/gamepolicyctl` has a historical directory name but
-is an active prerequisite referenced by local settings. Keep its path until a
-tested settings migration changes it. Likewise, do not rename/move bottles or
+Game Mode setup now prepares a verified copy under
+`DeadlockData/tools/game-mode/<digest>/gamepolicyctl`. The legacy
+`Tools/game-mode-investigation/gamepolicyctl` remains while old settings or recovery
+records reference it. Likewise, do not rename/move bottles or
 runtime roots for cosmetic reasons: current profiles use absolute paths.
 
 Some normal macOS caches/preferences and the per-user Game Mode ownership/recovery
