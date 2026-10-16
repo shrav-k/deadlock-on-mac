@@ -92,7 +92,7 @@ Projects/Games/Deadlock/
   DeadlockData/       private profiles and logs
   DeadlockBackups/    local Deadlock data snapshots
   Tools/              optional diagnostic compiler
-  Builds/             local app previews, outside Git
+  Builds/             one current app, one Previous rollback, small build history
   deadlock-audit-*/   local audit evidence (not published)
 ```
 

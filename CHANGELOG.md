@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.1 — development
+
+- Publish local previews at one stable app path with opt-in verified replacement,
+  one rollback app and bounded provenance history. Reject active manager/watchers
+  and changed app trees; test build failure, publication rollback and recovery.
+- Show prepared output size and resolved Retina state on Play, and distinguish
+  desktop coordinates from current backing pixels in Settings.
+- Explain Game Mode as a launch policy, including opt-out leaving the existing
+  system policy unchanged. Keep lifetime/restoration behavior independent of
+  the chosen display and the manager window.
+- Refuse Play when display choices have not been applied; refresh the prepared
+  summary after applying. Cover laptop/external Retina transitions, high-DPI
+  external displays and launch-policy presentation with automated tests.
+- Document the bottle-wide Retina limitation and the built-in display acceptance
+  sequence. Fullscreen visual results remain separate from policy tests.
+
 ## 0.4.0 — development
 
 - Replace the long control panel with Play, Settings and Diagnostics sidebar pages.

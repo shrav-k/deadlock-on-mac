@@ -7,7 +7,12 @@ struct ConnectedDisplay: Identifiable, Decodable {
     let main: Bool
     let builtin: Bool
     let mode_pixels: [Int]
-    var label: String { "\(name) · \(mode_pixels.map(String.init).joined(separator: "×"))\(main ? " · Main" : "")" }
+    let mode_logical: [Int]
+    let appkit_backing_scale: Double
+    var label: String { "\(name) · \(mode_pixels.map(String.init).joined(separator: "×")) px\(main ? " · Main" : "")" }
+    var geometrySummary: String {
+        "Desktop coordinates: \(mode_logical.map(String.init).joined(separator: "×")) · Current backing pixels: \(mode_pixels.map(String.init).joined(separator: "×")) · \(appkit_backing_scale.formatted())× scale"
+    }
 }
 
 struct DisplaySelection: Decodable {
@@ -15,6 +20,10 @@ struct DisplaySelection: Decodable {
     let choice: String?
     let retina_policy: String?
     let target_name: String?
+    let target_id: String?
+    let retina_enabled: Bool?
+    struct Guest: Decodable { let bounds: [Int] }
+    let guest: Guest?
 }
 
 struct DisplayReport: Decodable {
@@ -50,6 +59,32 @@ final class ManagerModel: ObservableObject {
     @Published var displayChoice = "default"
     @Published var retinaPolicy = "auto"
     @Published var displaySummary = "Refresh displays to choose where Deadlock opens."
+    @Published private(set) var appliedDisplay: DisplaySelection?
+
+    var selectedDisplay: ConnectedDisplay? {
+        let matches = displays.filter {
+            displayChoice == "default" ? $0.main : displayChoice == "external" ? !$0.builtin : $0.id == displayChoice
+        }
+        return matches.count == 1 ? matches[0] : nil
+    }
+    var displayChangesPending: Bool {
+        displayChoice != (appliedDisplay?.choice ?? "default") || retinaPolicy != (appliedDisplay?.retina_policy ?? "auto")
+    }
+    var retinaSummary: String {
+        guard let display = selectedDisplay else { return "Choose one connected display to resolve Retina scaling." }
+        let enabled = retinaPolicy == "auto" ? display.appkit_backing_scale > 1 : retinaPolicy == "on"
+        let origin = retinaPolicy == "auto" ? "Automatic" : "Manual override"
+        return "\(origin): Retina \(enabled ? "On" : "Off") for \(display.name). Applies to this Wine bottle, including Steam."
+    }
+    var gameModeSummary: String {
+        automaticGameMode ? "Game Mode: On during Play; restore prior policy on exit" : "Game Mode: leave the system policy unchanged"
+    }
+    var playArguments: [String] {
+        var arguments = ["launch"]
+        if !automaticGameMode { arguments += ["--without-game-mode"] }
+        else if !gameModeTool.isEmpty { arguments += ["--game-mode-tool", gameModeTool] }
+        return arguments
+    }
 
     func refreshDisplays() { run(["display"], label: "Reading connected displays…") }
 
@@ -62,13 +97,17 @@ final class ManagerModel: ObservableObject {
         guard let data = output.data(using: .utf8),
               let report = try? JSONDecoder().decode(DisplayReport.self, from: data) else { return }
         displays = report.displays
+        appliedDisplay = report.selection
         displayChoice = report.selection?.choice ?? "default"
         retinaPolicy = report.selection?.retina_policy ?? "auto"
         if let selected = report.selection, selected.phase == "ready" {
-            if !["default", "external"].contains(displayChoice) && !displays.contains(where: { $0.id == displayChoice }) {
-                displaySummary = "\(selected.target_name ?? "Saved display") is disconnected. Choose a connected display in Settings and apply it."
+            if selectedDisplay == nil || (selected.target_id != nil && selectedDisplay?.id != selected.target_id) {
+                displaySummary = "\(selected.target_name ?? "Saved display") is unavailable or the target changed. Choose a connected display in Settings and apply it."
             } else {
-                displaySummary = "Prepared: \(selected.target_name ?? displayChoice). Play checks for display and settings changes."
+                let bounds = selected.guest?.bounds ?? []
+                let output = bounds.count == 4 ? bounds.suffix(2).map(String.init).joined(separator: "×") : "unrecorded"
+                let retina = selected.retina_enabled.map { $0 ? "On" : "Off" } ?? "unrecorded"
+                displaySummary = "Prepared: \(selected.target_name ?? displayChoice) · \(output) borderless output · Retina \(retina). Play validates this before launch."
             }
         } else {
             displaySummary = "Choose a display, close Windows Steam, then Prepare. macOS main display stays unchanged."
@@ -128,10 +167,11 @@ final class ManagerModel: ObservableObject {
     }
 
     func play() {
-        var arguments = ["launch"]
-        if !automaticGameMode { arguments += ["--without-game-mode"] }
-        else if !gameModeTool.isEmpty { arguments += ["--game-mode-tool", gameModeTool] }
-        run(arguments, label: "Starting Deadlock through Steam…")
+        guard !displayChangesPending else {
+            status = "Display choices have not been applied. Close Windows Steam, then use Settings → Apply Display before Play."
+            return
+        }
+        run(playArguments, label: "Starting Deadlock through Steam…")
     }
 
     func chooseWorkspace() {
@@ -212,7 +252,9 @@ final class ManagerModel: ObservableObject {
                     if code == 0 && command.contains("--clear") {
                         self.displaySummary = "Display management is off; current game and Retina settings were preserved."
                     }
+                    let refreshPreparedDisplay = code == 0 && command.contains("--prepare") && !self.lifecycle.quitPending
                     self.finished(success: code == 0)
+                    if refreshPreparedDisplay { self.refreshDisplays() }
                 }
             } catch {
                 try? control?.fileHandleForReading.close()
@@ -285,8 +327,11 @@ struct PlayView: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 14) {
                     Label(model.displaySummary, systemImage: "display")
-                    Label(model.automaticGameMode ? "Game Mode enabled during Play" : "Automatic Game Mode disabled", systemImage: "speedometer")
-                    Text("Game Mode restores after Deadlock exits. Quitting this manager leaves the game and Steam running.")
+                    if model.displayChangesPending {
+                        Label("Display changes pending. Apply them in Settings before Play.", systemImage: "exclamationmark.circle")
+                    }
+                    Label(model.gameModeSummary, systemImage: "speedometer")
+                    Text("This is your launch policy, not a live status reading. Steam alone leaves Game Mode unchanged. Quitting this manager leaves the game and its watcher running.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
             }
@@ -340,8 +385,16 @@ struct ManagerSettingsView: View {
                     }
                 }
                 Picker("Retina scaling", selection: $model.retinaPolicy) {
-                    Text("Match selected display").tag("auto")
-                    Text("On").tag("on"); Text("Off").tag("off")
+                    Text("Automatic — match selected display").tag("auto")
+                    Text("On — manual override").tag("on"); Text("Off — manual override").tag("off")
+                }
+                Text(model.retinaSummary).font(.callout)
+                if let display = model.selectedDisplay {
+                    DisclosureGroup("Display measurements") {
+                        Text(display.geometrySummary).font(.caption).textSelection(.enabled)
+                        Text("Backing pixels describe the current macOS mode. Wine's output and the game's internal render scale are separate measurements.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 HStack {
                     Button("Refresh") { model.refreshDisplays() }
@@ -355,7 +408,7 @@ struct ManagerSettingsView: View {
         GroupBox("Game Mode") {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Enable during Play and restore on exit", isOn: $model.automaticGameMode)
-                Text("No time limit. The Play watcher continues if you close the manager.").font(.caption).foregroundStyle(.secondary)
+                Text("Recommended on for both laptop and external displays. No play-time limit; the watcher continues after Command–Tab or closing the manager. Turning this preference off affects the next launch and leaves the system policy unchanged.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Apple tool") {
                     HStack {
                         Button("Choose…") { model.chooseGameModeTool() }

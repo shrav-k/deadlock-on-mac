@@ -3,7 +3,8 @@
 Implementation follow-up: the 0.3.0 manager now includes the named display picker
 and guarded preparation described here. See [current setup and acceptance status](EXTERNAL-DISPLAYS.md).
 
-Reviewed **2026-10-14**. This review uses CodeWeavers support documentation,
+Reviewed **2026-10-14**, with the Retina source investigation extended on
+**2026-10-16**. This review uses CodeWeavers support documentation,
 upstream API specifications, the matched local Wine source, and isolated probes.
 It is not an endorsement or a claim of equivalent CrossOver compatibility.
 Community tips hosted on codeweavers.com are not official support guidance.
@@ -136,10 +137,73 @@ graphics behavior was retained. It is not a controlled DXMT performance comparis
 or a test of CrossOver's GUI High Resolution toggle. The temporary bottle was
 removed after preserving the small diagnostic records.
 
-The 5120×2880 guest mode is a **coordinate/reporting discrepancy to investigate**.
+The 5120×2880 guest mode is explained by the driver's global Retina scaling below.
 It does not prove a 5K Metal drawable, four times the GPU cost, or a scaling bug in
-the actual game's presentation. No display placement or gameplay pass is claimed.
+the actual game's presentation. No display placement or gameplay pass is claimed
+by this enumeration comparison.
 Private evidence: `DeadlockData/display-investigation/2026-10-14/`.
+
+### Why these dimensions appear
+
+The 2026-10-16 built-in diagnostic preparation explicitly selected **Retina off**,
+producing a 1512×982 Wine desktop. This was a test override, not the manager's Auto
+policy or a recommendation to render the game at that size. Auto in
+`src/deadlock_mac/displays.py` enables Retina when the selected native screen's
+backing scale exceeds 1. At the recorded desktop settings it therefore selects
+on for the laptop and off for the LG. This is a target-dependent choice of a
+bottle-wide setting, not independent per-monitor scaling.
+
+The matched engine source establishes the following behavior:
+
+- `winemac.drv/macdrv_main.c` initializes `retina_enabled` to false. Its
+  `RetinaMode` registry lookup deliberately ignores application-specific settings
+  so monitor sizes and DPI remain consistent across the prefix.
+- `winemac.drv/display.c` doubles the width and height of the original display
+  mode when Retina is enabled. `create_mode_dict`, `display_get_modes` and
+  `display_get_current_mode` apply this rule without consulting each monitor's
+  AppKit backing scale. This accounts for the LG's 2560×1440 becoming 5120×2880
+  in the guest even though the LG has a 1× backing scale.
+- `copy_display_modes` requests additional low-resolution/Retina mode variants
+  from CoreGraphics and filters duplicate size/DPI combinations. Consequently,
+  the game's list includes macOS scaled modes rather than only familiar PC
+  resolutions. The source specifically discusses otherwise omitted 1920×1200
+  modes on Retina Macs. This does not establish that exclusive fullscreen works
+  correctly for every mode in that list.
+- The runtime also already includes Highball's
+  `0020-winemac-retina-horzres-not-doubled.patch`, which removes an additional
+  doubling of GDI `HORZRES`/`VERTRES`. That correction is separate from the
+  intentional original-mode scaling above; reapplying it is not a fix for the LG.
+
+Sources: [Wine Retina configuration](https://github.com/wine-mirror/wine/blob/wine-11.0/dlls/winemac.drv/macdrv_main.c),
+[Wine display modes](https://github.com/wine-mirror/wine/blob/wine-11.0/dlls/winemac.drv/display.c).
+The matched local CrossOver-derived source and Highball recipe were inspected as
+well; upstream Wine alone does not describe every patch in the installed engine.
+
+CodeWeavers' documented application compatibility limits explain why enabling
+high-resolution support should be qualified rather than assumed universally safe.
+They do not prove the original historical rationale for Wine's default.
+
+The current 1512×982 logical desktop maps to a 3024×1964 backing mode on the
+laptop; Apple's hardware specification also identifies 3024×1964 as this model's
+native panel resolution. In general, however, a CoreGraphics mode's backing pixel
+size need not equal physical panel resolution: users can select scaled modes.
+Label it **current backing pixels**, not universally **native panel resolution**.
+[Apple hardware specification](https://support.apple.com/en-us/111340),
+[Apple backing scale](https://developer.apple.com/documentation/appkit/nswindow/backingscalefactor).
+
+SDL explicitly distinguishes window coordinates, window pixels and display scale.
+Our Windows SDL3 DLL runs through Wine's Windows display backend; its agreement
+with Win32/DXGI does not independently validate native macOS pixel mapping. Record
+the actual swapchain/render target and presentation alongside host and guest
+geometry. A mode enumeration alone cannot establish the game's render workload.
+[SDL high-DPI model](https://wiki.libsdl.org/SDL3/README-highdpi)
+
+For the UI, keep the selected display and output choice prominent, and place
+logical bounds, backing pixels, Wine-reported bounds and measured render-buffer
+size in clearly labelled details. Keep internal render scale separate from output
+size. The built-in popup versus SDL fullscreen-desktop matrix remains pending;
+the user paused the first visual check to request this investigation. No new
+Steam, game or grid launch was needed for these source findings.
 
 ## Recommended manager display design
 
@@ -165,7 +229,8 @@ Retina off for a 1× monitor, but it must pass actual coverage, drawable-size, i
 focus and quit tests before becoming a default. Retina is currently bottle-wide:
 if a change is needed, require a clean Wine/Steam restart and preserve user state.
 Do not silently edit an active prefix or claim per-monitor DPI support we have
-not implemented. The display picker is a design proposal, not shipped in 0.2.2.
+not implemented. The display picker shipped in 0.3.0; the 0.4.0 sidebar separates
+Settings from Diagnostics, but its fullscreen acceptance matrix remains open.
 
 ## Performance and version discipline
 

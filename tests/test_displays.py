@@ -98,6 +98,36 @@ class PreparationTests(unittest.TestCase):
         self.assertTrue((Path(state['graphics_backup']) / 'video.txt').exists())
         self.assertEqual(displays.validate_launch(self.root, self.profile)['target_id'], 'lg')
 
+    def test_auto_switches_from_standard_external_to_retina_laptop(self):
+        external = self.prepare()
+        self.assertFalse(external['retina_enabled'])
+        self.probe.return_value = OUTPUT.replace('bounds=0,0,1512,982', 'bounds=0,0,3024,1964').replace(
+            'bounds=1512,-458,2560,1440', 'bounds=3024,-916,5120,2880')
+        laptop = displays.prepare(self.root, self.profile, 'internal', report=lambda _: None)
+        self.assertEqual(laptop['retina_policy'], 'auto')
+        self.assertTrue(wine_display.status(self.profile)['enabled'])
+        self.assertEqual(laptop['settings']['setting.defaultres'], '3024')
+        self.assertEqual(laptop['settings']['setting.defaultresheight'], '1964')
+        self.assertEqual(game_settings.plan(self.profile)[2]['setting.viewportscale'], '0.4')
+        self.assertEqual(displays.validate_launch(self.root, self.profile)['target_id'], 'internal')
+
+    def test_auto_enables_retina_for_high_dpi_external_and_manual_off_is_explicit(self):
+        hosts = copy.deepcopy(HOSTS)
+        hosts[1].update(appkit_backing_scale=2, mode_pixels=[3840, 2160],
+                        mode_logical=[1920, 1080], quartz_bounds=[1512, -458, 1920, 1080])
+        self.host_inventory.return_value = hosts
+        self.probe.return_value = OUTPUT.replace('bounds=0,0,1512,982', 'bounds=0,0,3024,1964').replace(
+            'bounds=1512,-458,2560,1440', 'bounds=3024,-916,3840,2160')
+        state = self.prepare()
+        self.assertTrue(state['retina_enabled'])
+        self.assertEqual(state['settings']['setting.defaultres'], '3840')
+        self.assertEqual(state['settings']['setting.defaultresheight'], '2160')
+        self.probe.return_value = OUTPUT.replace('2560,1440', '1920,1080')
+        state = displays.prepare(self.root, self.profile, 'lg', retina='off', report=lambda _: None)
+        self.assertEqual(state['retina_policy'], 'off')
+        self.assertFalse(state['retina_enabled'])
+        self.assertEqual(state['settings']['setting.defaultres'], '1920')
+
     def test_live_wine_blocks_all_mutation(self):
         self.wine_processes_running.return_value = True
         before = self.video.read_bytes()

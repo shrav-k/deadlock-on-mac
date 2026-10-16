@@ -92,17 +92,19 @@ python3 bin/deadlock-mac game-fps --cap 60 --menu-cap 60 --apply
 In the app, use **60 FPS + performance HUD** and **Set game and menu limits to
 60 FPS**. The renderer request alone did not persist those in-game settings.
 
-The verified display setup on our M2 Max's built-in display uses Retina borderless
-at 3024×1964. With Steam/Wine still closed:
+The previously verified display setup on our M2 Max's built-in display uses Retina
+borderless at 3024×1964. Use the display picker rather than hardcoding that size
+for another Mac. With Steam/Wine still closed:
 
 ```sh
-python3 bin/deadlock-mac retina --set on --apply
-python3 bin/deadlock-mac graphics-preset --mode borderless --width 3024 --height 1964 --apply
+python3 bin/deadlock-mac display
+python3 bin/deadlock-mac display --prepare default --retina auto
 ```
 
-These dimensions are specific to that display. Follow the
-[Retina guide and rollback instructions](PERFORMANCE.md#experimental-high-resolution-borderless--retina)
-for another display; external-monitor behavior remains untested. Fullscreen
+`default` selects the macOS main display. For a secondary monitor use its identity
+from `display`, or `external` when exactly one external screen is connected. The
+manager does not change which macOS display is main. See the policy below and
+[external-display acceptance status](EXTERNAL-DISPLAYS.md). Exclusive fullscreen
 1920×1200 still has coverage and focus failures on the tested Mac.
 
 Configure the compatible Game Mode tool below, then use manager **Play** (CLI:
@@ -115,6 +117,56 @@ Connect to power and check Low Power Mode. Keep **Direct3D 11**: the paired DXMT
 renders through Metal on the Apple GPU. Record the upscaler, render scale and
 quality too; output dimensions alone do not establish internal rendering
 resolution. Vulkan has not been tested with this setup.
+
+## Display and Game Mode launch policy
+
+Keep **Enable during Play and restore on exit** checked on both laptop and external
+displays. Our earlier Mina test improved with Game Mode enabled; that is local
+evidence, not a guarantee for every game or monitor. Apple describes Game Mode as
+prioritizing game CPU/GPU access and reducing background use. Its normal automatic
+path requires supported macOS fullscreen, which a Wine borderless window does not
+necessarily provide. The manager's developer-tool override is system-wide and does
+not prove native per-game eligibility. [Apple Game Mode](https://support.apple.com/en-us/105118)
+
+| Target / activity | Manager policy |
+| --- | --- |
+| Built-in Retina display, currently 2× | Automatic Retina on; at the recorded desktop mode request 3024×1964 borderless output |
+| LG ULTRAGEAR, currently 1× | Automatic Retina off; at its recorded desktop mode request 2560×1440 borderless output |
+| Another external display | Resolve its native backing scale; a high-DPI external display may need Retina on |
+| Play through the manager | Save the current Game Mode policy, enable it for startup and the actual game lifetime, then restore the saved policy |
+| Steam alone / display test grid | Do not change Game Mode policy |
+| Command–Tab / Quit Manager while playing | Keep the detached Play watcher running; restore on actual game exit |
+| Game Mode preference unchecked | Leave system policy unchanged on the next launch; this does not force Game Mode off or cancel an existing watcher |
+
+In **Settings → Display**, choose **Play on** and **Automatic — match selected
+display**, close Windows Steam, then **Apply Display**. The manager backs up the
+affected settings, applies Wine's bottle-wide Retina option, checks guest monitor
+mapping and saves borderless output. No per-monitor DPI support is implied. Keep
+manual On/Off overrides for diagnostics. See the [Retina source findings](WINE-PRACTICES.md#why-these-dimensions-appear).
+
+The Play screen shows the **prepared** display, output and Retina state. Its Game
+Mode line describes the launch preference, not a live policy measurement. Read
+**Diagnostics → Game Mode Status** and **Play Session Status** for that evidence.
+Unapplied UI choices block Play rather than silently using the old choice. Apply
+Display refreshes the saved summary. Play also validates the actual connected
+layout, settings and Wine mapping; stale or disconnected selections require
+preparation again. It does not silently stop Steam, select a fallback screen or
+change resolution during play. After changing desks, quit the game/Windows Steam,
+refresh, choose the connected screen and apply before the next Play.
+
+Retina configuration remains saved for subsequent Steam sessions. Game Mode is
+temporary: restore the exact previous policy, including `on` if that was already
+set. A failed startup also restores it. Native resolution and internal render
+scale are separate; the output setting alone does not establish GPU workload.
+
+For built-in acceptance, start with Automatic Retina and compare the **Win32
+borderless popup** grid with **SDL fullscreen desktop**. For each, record all four
+edges, corner clicks, Command–Tab, menu-bar behavior, requested/backbuffer dimensions
+and normal closure. The manager leaves Game Mode policy unchanged during grids.
+Then check the game menu through Play and Exit, including Game Mode restoration;
+this is not gameplay qualification. A Retina-off comparison is an explicitly
+labelled diagnostic and should be followed by restoring Automatic. External
+display and actual gameplay acceptance remain separate pending runs.
 
 ## Automatic Game Mode during Play
 
