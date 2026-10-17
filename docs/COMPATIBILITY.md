@@ -562,3 +562,32 @@ renders cover other views without claiming a complete interactive walkthrough.
 The menu telemetry capture includes startup/focus gaps and is not a gameplay
 benchmark. Keep Steam's desktop interface as default; Big Picture is an optional
 UX experiment, not a demonstrated performance optimization.
+
+## 0.4.6 Big Picture focus failure — 2026-10-16
+
+The actual manager **Steam → Open Big Picture** action launched the existing
+Windows Steam account. The user confirmed that Big Picture filled the **MacBook**
+display and pointer clicks worked, but **Command–Tab did not work**. The saved game
+target was still LG ULTRAGEAR with Wine Retina Off; this was not a built-in Retina
+On test. Steam's monitor choice is independent of the prepared Deadlock target.
+No Deadlock process was launched, and the Game Mode policy remained `auto`.
+
+The user then needed to disconnect the LG. A normal `steam-exit` completed,
+including the client, browser helpers and Wine server. The saved LG configuration
+was retained. External-display placement and focus qualification must resume when
+the display is available again. Big Picture is not accepted as the default UI.
+Private evidence: `DeadlockData/qualification/20261016-retina-hang/big-picture-button-unlocked.json`.
+
+Initial source review used the pinned CodeWeavers 26.3.0 archive and the current
+bottle registry. `CaptureDisplaysForFullscreen` defaults to false, and the only
+explicit global Mac Driver entry is `RetinaMode=n`; there is no evidence that
+forcing display capture off would change this run. The driver also has a
+Command–Tab fallback and conditional inactive-window levels. These are diagnostic
+leads, not an established cause or a qualified fix. No keyboard, window-level,
+capture or renderer overrides were applied in response to this failure.
+
+The next built-in comparison should distinguish a missing app switcher from a
+window that stays on top, then compare desktop Steam with Big Picture at the same
+scaling policy. Check normal exit after each attempt before changing Retina or
+window policy. Keep external placement, mixed-DPI and disconnect/reconnect tests
+separate from this focus reproduction.

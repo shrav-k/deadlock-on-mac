@@ -57,7 +57,11 @@ transition from an already-running desktop client in local testing. The current
 interface. This URI also appears in
 [Valve's client issue tracker](https://github.com/ValveSoftware/steam-for-linux/issues/12056).
 Log transitions and clean process exit do not establish fullscreen coverage,
-pointer alignment or focus recovery; those still need an unlocked visual check.
+pointer alignment or focus recovery. In the first unlocked 0.4.6 check, the user
+reported fullscreen on the MacBook and working clicks, but **Command–Tab failed**.
+The LG remained the manager's prepared game target; Steam did not follow that
+selection. Keep Big Picture optional until focus recovery and monitor placement
+pass. See the [qualification record](COMPATIBILITY.md#046-big-picture-focus-failure--2026-10-16).
 
 ## Source installation
 
