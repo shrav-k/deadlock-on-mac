@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "default": "highball",
+  "runtimes": {
+    "highball": {
+      "label": "Highball Wine 11 + paired DXMT",
+      "wine_family": "highball",
+      "wine": "highball-wine-20261006",
+      "dxmt": "dxmt-highball-a444716",
+      "support": "sikarugir-support-1.0.21",
+      "minimum_macos": [15, 0],
+      "status": "experimental: Steam works; Deadlock startup crash under investigation"
+    },
+    "sikarugir": {
+      "label": "Sikarugir Wine 11 + upstream DXMT 0.80",
+      "wine_family": "sikarugir",
+      "wine": "sikarugir-wine-11.0_1",
+      "dxmt": "dxmt-0.80",
+      "support": "sikarugir-support-1.0.21",
+      "minimum_macos": [14, 6],
+      "status": "comparison only: Steam login UI is black on tested M2 Max"
+    }
+  }
+}

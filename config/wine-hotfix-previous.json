@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "id": "highball-exitfix-v1",
+  "runtime_version": "highball-wine-20261006",
+  "status": "candidate; requires live Steam and Deadlock exit acceptance",
+  "inputs": {
+    "wine": {
+      "url": "https://media.codeweavers.com/pub/crossover/source/crossover-sources-26.3.0.tar.gz",
+      "filename": "crossover-sources-26.3.0.tar.gz",
+      "sha256": "ac99c8ca4b3848f3e81784135f023df266b61c2345726ea55a50b3e030dd6872"
+    },
+    "highball": {
+      "url": "https://codeload.github.com/gauthierpiarrette/highball-engine/tar.gz/ac5cc83bb7d90b8fcca8e60a4a37fce2b9ee1d81",
+      "filename": "highball-source-ac5cc83bb7d9.tar.gz",
+      "sha256": "f5a058278bd4e6671221bf24498a2b38ccd19e751c05b8ae3449ae42ebd6c794"
+    },
+    "llvm": {
+      "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-macos-universal.tar.xz",
+      "filename": "llvm-mingw-20261006-ucrt-macos-universal.tar.xz",
+      "sha256": "a7a19b11048e89372637d26279cdb7c430ed3cf8c1e224310421312bf986ebf6"
+    },
+    "bison": {
+      "url": "https://ftp.gnu.org/gnu/bison/bison-3.8.2.tar.xz",
+      "filename": "bison-3.8.2.tar.xz",
+      "sha256": "9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2"
+    }
+  },
+  "highball_patches": {
+    "0001-use-the-real-user-name.patch": "32f32bc1c3b270def7a0622f1fe67afdcf20d3877cd51e99be17b50817ecf1d6",
+    "0002-wined3d-auto-renderer-opengl-first.patch": "011e682a90bfa3b2b0ebf6e72c5d93fbf3af674bf5c4cf05dd506622c23eb892",
+    "0003-ntdll-winedllpath-prepend.patch": "8a56c17512731bd853ddc9e638761a5f9623b65e7c44bbefd89e757c3b868dc9",
+    "0005-ntdll-yield-after-auto-event-set.patch": "bc2c02bb920c5f36a48e8b7a6ad15c1964ad84a2a26215aa39a99ce08f47ba2e",
+    "0006-kernelbase-per-exe-command-line-append.patch": "cda40f3611a59d450b508000d0f2a9b43b5dba4030af5ce6c35180f8f4a7332b",
+    "0007-winemac-cross-process-child-swapchains.patch": "cd1fe23109b5addf70d74b7c82cc837f71d99373beb28138bd8802e712d74d26",
+    "0008-macos-mirror-teb-fiberdata.patch": "036980ab0a68fc516bb9eb6e156321e11c40d6e2bccc36a700937084056fed2a",
+    "0009-macos-swap-fiberdata-and-qos-slot.patch": "0fcd084eb255288319d71739d69ba459fec637499cc04ab79aff8767fa8cb42c",
+    "0010-mfreadwrite-video-processor-sample-allocator.patch": "d16d712a2cdbec5194ba977b649054d26ce78ea7ec760a508625b009c40b17ad",
+    "0011-macos-lasterror-in-gs-slot.patch": "f9141f3ffd5a8a6d79304c5e2d7c7e400be738d7ada0a6d35647583e67c153b3",
+    "0012-ntdll-x87sidecar-cooperative-attach.patch": "0d88c3c9359f3591e521eb5dd48534999889ef85ff44385d2d3832d8c75878c3",
+    "0013-ntdll-nx-compat-from-main-image-permanent-under-rosetta.patch": "a208a9b4826bcb87babb2e206aee12b64a50a176544442bc6406e4b605bdb7ab",
+    "0014-msync-unregister-early-return.patch": "09c46f062f7e936bb331274192ce3436dbd18242a1b1618ca4944b6193158715",
+    "0015-winecoreaudio-io-buffer-under-half-a-period.patch": "052b593e167ee1e732f2eeeafefc362b16612b8a247f293d903dafcd34bbe0c4",
+    "0016-macos-lasterror-callback-return-once.patch": "e9d867935f62ae998a887e6694365470a35c664a098c8e7cab056219b58fe495",
+    "0017-kernelbase-getintegrateddisplaysize-stub.patch": "4a1d36cf5615b009dd1cc3cc3dc5da4288e008ed8c8f8bac65cdb4190a99a461",
+    "0018-macos-commit-charge-is-the-footprint.patch": "c8ec9641577b755f075de8342cdb883c390fc20eca8acaeb68a6d2d2d39128b7",
+    "0019-advapi32-credenumerate-empty-keychain-is-not-an-error.patch": "cdde79f08bbf892735ae883ff6389068a4ec4faa136bdba36637142f0ace8e84",
+    "0020-winemac-retina-horzres-not-doubled.patch": "77cffeb2106d0d352c5cb7b4e0ad5e6c2d3de366950d9cf37f06afcaff638dc6",
+    "0021-opengl32-es2-compat-calls-in-legacy-contexts.patch": "8553b4f3fcb092edfde2f12ec410b004a7bebca5c7177d0a1b77837717280249"
+  },
+  "backports": {
+    "0001-d8aa0abfb592.patch": "12ef7853293b04728ed62343eb1a842755f28b06be590347b76ee4adeabc0533",
+    "0002-f38f3ac7708f.patch": "8a06b23266f8d5511534a4428deb97cdf8c1a0ebfa5584df5de6c6650df9d266"
+  },
+  "files": {
+    "x86_64-windows/sechost.dll": "f16791a229e5214f5bc54b31423f5a97f89f33d7a859e92a31faa05a88a33eba",
+    "i386-windows/sechost.dll": "c147a1dcb2cb2aa42de4feb460c8858c083d60952bcb0fbbf7d171342e2705ed"
+  },
+  "source_date_epoch": 1791303436,
+  "license": "LGPL-2.1-or-later",
+  "host_sdk_tested": "macOS 26.5 Command Line Tools",
+  "scope": "sechost.dll only, x86_64 and i386; engine and renderer are unchanged"
+}

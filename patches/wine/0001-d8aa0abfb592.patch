@@ -1,0 +1,118 @@
+From d8aa0abfb5923e4d0cbbb659e13f9f8f7c5c9ee0 Mon Sep 17 00:00:00 2001
+From: Tim Clem <tclem@codeweavers.com>
+Date: Mon, 13 Apr 2026 10:21:03 -0700
+Subject: [PATCH] sechost: Catch invalid HDEVNOTIFY arguments to
+ I_ScUnregisterDeviceNotification.
+
+---
+ dlls/sechost/service.c    | 34 ++++++++++++++++++++++++++++++----
+ dlls/user32/tests/input.c | 22 ++++++++++++++++++++--
+ 2 files changed, 50 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/sechost/service.c b/dlls/sechost/service.c
+index 474d977ac5ed..011ef5c1a62f 100644
+--- a/dlls/sechost/service.c
++++ b/dlls/sechost/service.c
+@@ -1979,8 +1979,11 @@ BOOL WINAPI DECLSPEC_HOTPATCH StartServiceCtrlDispatcherW( const SERVICE_TABLE_E
+ static HANDLE device_notify_thread;
+ static struct list device_notify_list = LIST_INIT(device_notify_list);
+ 
++#define DEVICE_NOTIFY_MAGIC 0xdecafbad
++
+ struct device_notify
+ {
++    DWORD magic;
+     struct list entry;
+     WCHAR *path;
+     HANDLE handle;
+@@ -1995,6 +1998,7 @@ static struct device_notify *device_notify_copy( struct device_notify *notify, D
+     struct device_notify *event;
+ 
+     if (!(event = calloc( 1, sizeof(*event) + header->dbch_size ))) return NULL;
++    event->magic = DEVICE_NOTIFY_MAGIC;
+     event->handle = notify->handle;
+     event->callback = notify->callback;
+     memcpy( event->header, header, header->dbch_size );
+@@ -2143,6 +2147,7 @@ HDEVNOTIFY WINAPI I_ScRegisterDeviceNotification( HANDLE handle, DEV_BROADCAST_H
+         SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+         return NULL;
+     }
++    notify->magic = DEVICE_NOTIFY_MAGIC;
+     notify->handle = handle;
+     notify->callback = callback;
+     memcpy( notify->header, filter, filter->dbch_size );
+@@ -2183,16 +2188,37 @@ HDEVNOTIFY WINAPI I_ScRegisterDeviceNotification( HANDLE handle, DEV_BROADCAST_H
+ BOOL WINAPI I_ScUnregisterDeviceNotification( HDEVNOTIFY handle )
+ {
+     struct device_notify *notify = handle;
++    BOOL ret = TRUE;
+ 
+     TRACE("%p\n", handle);
+ 
+     if (!handle)
++    {
++        SetLastError( ERROR_INVALID_HANDLE );
+         return FALSE;
++    }
+ 
+     EnterCriticalSection( &service_cs );
+-    list_remove( &notify->entry );
++
++    __TRY
++    {
++        if (notify->magic != DEVICE_NOTIFY_MAGIC)
++        {
++            SetLastError( ERROR_INVALID_HANDLE );
++            ret = FALSE;
++        }
++
++        list_remove( &notify->entry );
++        free( notify->path );
++        free( notify );
++    }
++    __EXCEPT_PAGE_FAULT
++    {
++        SetLastError( ERROR_SERVICE_SPECIFIC_ERROR );
++        ret = FALSE;
++    }
++    __ENDTRY
++
+     LeaveCriticalSection(&service_cs);
+-    free( notify->path );
+-    free( notify );
+-    return TRUE;
++    return ret;
+ }
+diff --git a/dlls/user32/tests/input.c b/dlls/user32/tests/input.c
+index 905ff0dd9224..f41f54b48294 100644
+--- a/dlls/user32/tests/input.c
++++ b/dlls/user32/tests/input.c
+@@ -5250,8 +5250,26 @@ static void test_input_message_source(void)
+ 
+ static void test_UnregisterDeviceNotification(void)
+ {
+-    BOOL ret = UnregisterDeviceNotification(NULL);
+-    ok(ret == FALSE, "Unregistering NULL Device Notification returned: %d\n", ret);
++    const char *not_a_devnotify = "this is a valid but garbage pointer";
++    BOOL ret;
++
++    /* NULL gives ERROR_INVALID_HANDLE */
++    SetLastError( 0xdeadbeef );
++    ret = UnregisterDeviceNotification( NULL );
++    ok( ret == FALSE, "Unregistering NULL Device Notification returned: %d\n", ret );
++    ok_ret( ERROR_INVALID_HANDLE, GetLastError() );
++
++    /* A valid pointer that isn't an HDEVNOTIFY gives ERROR_INVALID_HANDLE */
++    SetLastError( 0xdeadbeef );
++    ret = UnregisterDeviceNotification( (HDEVNOTIFY)not_a_devnotify );
++    ok( ret == FALSE, "Unregistering invalid HDEVNOTIFY returned: %d\n", ret );
++    ok_ret( ERROR_INVALID_HANDLE, GetLastError() );
++
++    /* A non-null faulting pointer gives ERROR_SERVICE_SPECIFIC_ERROR */
++    SetLastError( 0xdeadbeef );
++    ret = UnregisterDeviceNotification( (HDEVNOTIFY)0xdeadbeef );
++    ok( ret == FALSE, "Unregistering invalid HDEVNOTIFY returned: %d\n", ret );
++    ok_ret( ERROR_SERVICE_SPECIFIC_ERROR, GetLastError() );
+ }
+ 
+ static void test_SendInput( WORD vkey, WCHAR wch, HKL hkl )

@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.venv/
+local/
+*.log
+*.zip
+*.tar.*
+*.exe
+*.dmp
+/native-bin/
