@@ -13,14 +13,19 @@ other heavy work during the measured segment.
 Exit Windows Steam and all Wine apps before changing the launch environment:
 
 ```sh
-python3 bin/deadlock-mac performance --fps-cap 60 --hud on --hud-log on
+python3 bin/deadlock-mac performance --fps-cap 0 --hud on --hud-log on
 python3 bin/deadlock-mac steam
 python3 bin/deadlock-mac launch
 ```
 
-Settings live outside Git in `DeadlockData/performance/<profile>.json`. The cap
-uses the paired DXMT build's `d3d11.preferredMaxFrameRate`. It is a requested limit;
-confirm actual behavior with the HUD. Steam passes its startup environment to the
+Settings live outside Git in `DeadlockData/performance/<profile>.json`. Zero removes
+the extra DXMT limit; set the game's own limits below. A nonzero renderer cap uses
+`d3d11.preferredMaxFrameRate`, which must divide the display refresh rate according
+to [DXMT's documentation](https://github.com/3Shain/dxmt/blob/main/docs/CUSTOMIZATION.md).
+On our 144 Hz LG, requesting 60 through that setting produced a 48 FPS cadence.
+After removing it, the retry approached 60; quality settings changed during that
+run, so it is not a controlled performance comparison. Confirm actual behavior
+with the HUD. Steam passes its startup environment to the
 game, so sending a second launch request does not change an already-running client's
 settings. The private **Steam startup log** normally receives the game's HUD output.
 
@@ -46,6 +51,10 @@ no one mode is claimed to improve every game or engine. `performance --reset` re
 these overrides on the next restart. Normal shader caches are preserved.
 
 ## Display and quality
+
+Use [visual testing](VISUAL-TESTING.md) to inspect the actual frame and settings
+before a comparison. The [LG comparison plan](LG-OPTIMIZATION.md) separates image
+quality, output dimensions, render scale and runtime experiments.
 
 Reach the menu using the normal Steam launch before changing display settings.
 Choose a mode actually offered by the display and record the window

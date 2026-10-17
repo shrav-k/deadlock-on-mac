@@ -25,6 +25,7 @@ from . import media_runtime
 from . import benchmark
 from . import wine_display
 from . import displays
+from . import visual
 from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
@@ -233,6 +234,15 @@ def main(argv=None):
     sub.add_parser("steam-exit", help="Close Deadlock, restore Game Mode, then shut down this profile's Windows Steam")
     p = sub.add_parser("wine-hotfix", help="Verify or select a pinned Wine hotfix; Steam must be closed to change it")
     p.add_argument("--set", choices=("on", "off", "previous"), help="on selects current; previous restores the pinned exit-only revision")
+    p = sub.add_parser("visual", help="Private window capture and observed, scoped Wine input")
+    p.add_argument("action", choices=("status", "request-screen", "request-input", "enable-input", "stop-input", "windows", "capture", "click", "key"))
+    p.add_argument("--target", choices=tuple(visual.TARGETS), default="deadlock")
+    p.add_argument("--window", type=int, help="Window ID from visual windows; default captures the largest visible target window")
+    p.add_argument("--capture", help="Fresh capture ID required for one input action")
+    p.add_argument("--x", type=float, help="PNG pixel coordinate, not desktop points")
+    p.add_argument("--y", type=float)
+    p.add_argument("--key", choices=sorted(visual.KEYS))
+    p.add_argument("--hold-ms", type=int, default=40, help="Movement keys only: hold for 40–1000 ms, then release and capture")
     p = sub.add_parser("benchmark", help="Start, mark or finish a private gameplay measurement")
     p.add_argument("action", choices=("start", "mark", "finish"))
     p.add_argument("--run", help="Run ID returned by benchmark start")
@@ -353,7 +363,7 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "steam-exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps", "display"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "steam-exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps", "display", "visual"):
             if (args.command == "display" and not (args.prepare or args.clear or args.test_window)
                     and not profile_file(workspace, args.profile).exists()):
                 profile = {"id": args.profile}
@@ -373,7 +383,22 @@ def main(argv=None):
                               "provider": profile["provider"], "executes": False}, indent=2))
             return 0
         with lock(workspace / "DeadlockData"):
-            if args.command == "display":
+            if args.command == "visual":
+                if args.action in ("status", "request-screen", "request-input"):
+                    result = visual.permissions(workspace, args.action)
+                    result["input_session"] = visual.session(workspace, profile)
+                elif args.action in ("enable-input", "stop-input"):
+                    result = visual.session(workspace, profile, args.action == "enable-input")
+                elif args.action == "windows":
+                    result = visual.windows(workspace, profile, args.target)
+                elif args.action == "capture":
+                    result = visual.capture(workspace, profile, args.target, args.window)
+                else:
+                    if not args.capture:
+                        raise ManagerError("Take and inspect a visual capture first, then supply --capture ID.")
+                    result = visual.act(workspace, profile, args.capture, args.action, args.x, args.y, args.key, hold_ms=args.hold_ms)
+                print(json.dumps(result, indent=2))
+            elif args.command == "display":
                 if args.prepare:
                     result = displays.prepare(workspace, profile, args.prepare, args.retina)
                 elif args.clear:

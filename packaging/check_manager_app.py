@@ -60,7 +60,7 @@ def main():
                         '-target', f'{platform.machine()}-apple-macos15.0',
                         str(REPO / 'packaging/ManagerLifecycle.swift'),
                         str(REPO / 'packaging/WineActivation.swift'),
-                        str(REPO / 'packaging/DeadlockManager.swift'),
+                        str(REPO / 'packaging/VisualTesting.swift'), str(REPO / 'packaging/DeadlockManager.swift'),
                         str(REPO / 'tests/native/manager_app_test.swift'), '-o', str(binary)], check=True)
         for scenario in ('idle-close', 'success-close', 'success-quit', 'failure-close',
                          'failure-quit', 'failure-close-retry-quit', 'diagnostic-close',
@@ -78,7 +78,7 @@ def main():
                         '-target', f'{platform.machine()}-apple-macos15.0',
                         str(REPO / 'packaging/ManagerLifecycle.swift'),
                         str(REPO / 'packaging/WineActivation.swift'),
-                        str(REPO / 'packaging/DeadlockManager.swift'),
+                        str(REPO / 'packaging/VisualTesting.swift'), str(REPO / 'packaging/DeadlockManager.swift'),
                         str(REPO / 'tests/native/display_model_test.swift'), '-o', str(display_test)], check=True)
         subprocess.run([str(display_test)], check=True, timeout=10)
         activation_test = root / 'ActivationTests'
@@ -87,12 +87,18 @@ def main():
                         str(REPO / 'packaging/WineActivation.swift'),
                         str(REPO / 'tests/native/wine_activation_test.swift'), '-o', str(activation_test)], check=True)
         subprocess.run([str(activation_test)], check=True, timeout=10)
+        visual_test = root / 'VisualGeometryTests'
+        subprocess.run(['/usr/bin/xcrun', 'swiftc', '-parse-as-library',
+                        '-target', f'{platform.machine()}-apple-macos15.0',
+                        str(REPO / 'packaging/VisualTesting.swift'),
+                        str(REPO / 'tests/native/visual_geometry_test.swift'), '-o', str(visual_test)], check=True)
+        subprocess.run([str(visual_test)], check=True, timeout=10)
         session_test = root / 'SessionReaderTests'
         subprocess.run(['/usr/bin/xcrun', 'swiftc', '-parse-as-library', '-D', 'MANAGER_APP_TESTS',
                         '-target', f'{platform.machine()}-apple-macos15.0',
                         str(REPO / 'packaging/ManagerLifecycle.swift'),
                         str(REPO / 'packaging/WineActivation.swift'),
-                        str(REPO / 'packaging/DeadlockManager.swift'),
+                        str(REPO / 'packaging/VisualTesting.swift'), str(REPO / 'packaging/DeadlockManager.swift'),
                         str(REPO / 'tests/native/session_reader_test.swift'), '-o', str(session_test)], check=True)
         subprocess.run([str(session_test), str(resources), str(root)], check=True, timeout=20)
 

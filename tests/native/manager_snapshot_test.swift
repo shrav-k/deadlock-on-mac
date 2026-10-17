@@ -16,14 +16,14 @@ import SwiftUI
         var manifest: [[String: Any]] = []
         for dark in [false, true] {
             for width in [CGFloat(640), CGFloat(820)] {
-                for page in ["play-waiting", "play-failed", "settings", "diagnostics"] {
+                for page in ["play-waiting", "play-failed", "settings", "diagnostics", "visual-testing"] {
                     model.playSessionSummary = page == "play-failed"
                         ? "Play session failed: Steam reported a stalled main loop before game startup. Previous Game Mode policy restored."
                         : "Waiting for Deadlock to start through Steam. Check Steam for login, update or Cloud prompts."
                     let content = AnyView(VStack(alignment: .leading, spacing: 20) {
                         if page.hasPrefix("play") { PlayView(model: model) }
                         else if page == "settings" { ManagerSettingsView(model: model) }
-                        else { ManagerDiagnosticsView(model: model) }
+                        else { ManagerDiagnosticsView(model: model, visualTestingExpanded: page == "visual-testing") }
                     }.padding(24).frame(width: width, alignment: .topLeading)
                         .background(Color(nsColor: .windowBackgroundColor))
                         .environment(\.colorScheme, dark ? .dark : .light))

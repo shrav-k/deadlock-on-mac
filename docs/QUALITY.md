@@ -91,7 +91,8 @@ action. These two exit patches already exist upstream.
 Enable logging with Steam closed once, then use normal Play with Game Mode:
 
 ```sh
-python3 bin/deadlock-mac performance --fps-cap 60 --hud on --hud-log on
+python3 bin/deadlock-mac performance --fps-cap 0 --hud on --hud-log on
+python3 bin/deadlock-mac game-fps --cap 60 --menu-cap 60 --apply
 python3 bin/deadlock-mac launch --game-mode-tool /absolute/path/to/gamepolicyctl
 # Once gameplay starts; retain the returned run ID:
 python3 bin/deadlock-mac benchmark start --scenario manual-match --resolution '1920x1200; verify display mode'

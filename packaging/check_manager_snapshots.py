@@ -32,7 +32,7 @@ def main():
                         '-target', f'{platform.machine()}-apple-macos15.0',
                         str(REPO / 'packaging/ManagerLifecycle.swift'),
                         str(REPO / 'packaging/WineActivation.swift'),
-                        str(REPO / 'packaging/DeadlockManager.swift'),
+                        str(REPO / 'packaging/VisualTesting.swift'), str(REPO / 'packaging/DeadlockManager.swift'),
                         str(REPO / 'tests/native/manager_snapshot_test.swift'), '-o', str(binary)], check=True)
         subprocess.run([str(binary), str(output)], check=True, timeout=60)
     print(output)

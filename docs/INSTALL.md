@@ -133,16 +133,22 @@ resolution through the game's settings after reaching the menu, and verify it th
 ## Establish a baseline
 
 After the first game launch has created its settings, close Deadlock, Windows
-Steam and all Wine apps. Save both the renderer's requested limit and the game's
+Steam and all Wine apps. Remove the extra renderer cap and save the game's
 actual game/menu limits:
 
 ```sh
-python3 bin/deadlock-mac performance --fps-cap 60 --hud on --hud-log on
+python3 bin/deadlock-mac performance --fps-cap 0 --hud on --hud-log on
 python3 bin/deadlock-mac game-fps --cap 60 --menu-cap 60 --apply
 ```
 
-In the app, use **60 FPS + performance HUD** and **Set game and menu limits to
-60 FPS**. The renderer request alone did not persist those in-game settings.
+In Diagnostics, use **Enable Metal HUD logging (game controls FPS)**. In Settings,
+use **Set game and menu limits to 60 FPS**. DXMT's optional pacing cap must divide the monitor's
+refresh rate; requesting 60 on our 144 Hz LG produced 48 FPS. The game cap avoids
+that extra renderer constraint. Verify both limits in the game.
+
+Optional [visual testing](VISUAL-TESTING.md) provides window screenshots and scoped
+input. macOS Screen Recording and Accessibility permissions require the user;
+installation does not grant them automatically.
 
 The previously verified display setup on our M2 Max's built-in display uses Retina
 borderless at 3024×1964. Use the display picker rather than hardcoding that size

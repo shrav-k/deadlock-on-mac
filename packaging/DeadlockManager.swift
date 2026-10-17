@@ -555,10 +555,15 @@ struct ManagerSettingsView: View {
 
 struct ManagerDiagnosticsView: View {
     @ObservedObject var model: ManagerModel
+    @State private var visualTestingExpanded: Bool
     @State private var presentation = "popup"
     @State private var displayMode = "borderless"
     @State private var displayWidth = ""
     @State private var displayHeight = ""
+    init(model: ManagerModel, visualTestingExpanded: Bool = false) {
+        self.model = model
+        _visualTestingExpanded = State(initialValue: visualTestingExpanded)
+    }
     var body: some View {
         Text("Diagnostics").font(.largeTitle.bold())
         Text("Display checks run without gameplay. Results and partial logs stay in your workspace.").foregroundStyle(.secondary)
@@ -584,9 +589,30 @@ struct ManagerDiagnosticsView: View {
             }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
         }.disabled(model.running)
         DisclosureGroup("Performance recording") {
-            Button("Enable 60 FPS cap and Metal HUD logging") {
-                model.run(["performance", "--fps-cap", "60", "--hud", "on", "--hud-log", "on"], label: "Saving performance recording settings…")
+            Button("Enable Metal HUD logging (game controls FPS)") {
+                model.run(["performance", "--fps-cap", "0", "--hud", "on", "--hud-log", "on"], label: "Saving performance recording settings…")
             }.padding(.top, 8).disabled(model.running)
+            Text("Use the game/menu FPS limits in Settings. A separate DXMT cap can reduce 60 FPS to 48 on a 144 Hz display.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        DisclosureGroup("Visual testing", isExpanded: $visualTestingExpanded) {
+            HStack {
+                Menu("Capture Window") {
+                    Button("Deadlock") { model.run(["visual", "capture", "--target", "deadlock"], label: "Capturing Deadlock…") }
+                    Button("Windows Steam") { model.run(["visual", "capture", "--target", "steam"], label: "Capturing Windows Steam…") }
+                    Button("Test Grid") { model.run(["visual", "capture", "--target", "grid"], label: "Capturing grid…") }
+                }
+                Menu("Permissions and Input") {
+                    Button("Check Permissions") { model.run(["visual", "status"], label: "Checking visual permissions…") }
+                    Button("Request Screen Recording") { model.run(["visual", "request-screen"], label: "Handle the macOS screen-recording prompt…") }
+                    Button("Request Accessibility") { model.run(["visual", "request-input"], label: "Handle the macOS Accessibility prompt…") }
+                    Divider()
+                    Button("Enable Input for Four Hours") { model.run(["visual", "enable-input"], label: "Enabling observed visual input…") }
+                    Button("Stop Input") { model.run(["visual", "stop-input"], label: "Stopping visual input…") }
+                }
+            }.padding(.top, 8).disabled(model.running)
+            Text("Local PNGs and receipts are saved under DeadlockData/visual. The CLI can capture a Wine window and send one click or key using a fresh capture ID. Input requires Accessibility, verified focus and an enabled session. No audio, remote server or continuous recording.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         DisclosureGroup("Recovery") {
             VStack(alignment: .leading, spacing: 10) {
@@ -707,6 +733,12 @@ final class ManagerAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 struct DeadlockManagerApp {
     @MainActor static func main() {
         let app = NSApplication.shared
+        if CommandLine.arguments.dropFirst().first == "--visual-worker" {
+            app.setActivationPolicy(.prohibited)
+            Task { exit(await VisualWorker.main()) }
+            app.run()
+            return
+        }
         let delegate = ManagerAppDelegate()
         app.setActivationPolicy(.regular)
         app.delegate = delegate

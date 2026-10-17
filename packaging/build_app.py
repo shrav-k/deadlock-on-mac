@@ -214,7 +214,7 @@ def build_staged(output, downloads, wine_hotfix=None):
         plistlib.dump(info, stream)
     subprocess.run(["/usr/bin/xcrun", "swiftc", "-parse-as-library", "-O", "-target", "arm64-apple-macos15.0",
                     str(REPO / "packaging/ManagerLifecycle.swift"), str(REPO / "packaging/WineActivation.swift"),
-                    str(REPO / "packaging/DeadlockManager.swift"),
+                    str(REPO / "packaging/VisualTesting.swift"), str(REPO / "packaging/DeadlockManager.swift"),
                     "-o", str(macos / "DeadlockManager")], check=True)
     # Exercise the same isolated entry point the UI will run before signing it.
     subprocess.run([str(resources / "python/bin/python3"), "-I", "-B", str(resources / "launcher.py"), "--help"],

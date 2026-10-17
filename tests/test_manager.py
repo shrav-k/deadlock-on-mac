@@ -91,11 +91,14 @@ class WorkspaceTest(unittest.TestCase):
 
     def test_no_sensitive_or_conflicting_environment_leaks(self):
         with patch.dict(os.environ, {"GITHUB_TOKEN": "secret", "WINEPREFIX": "/other",
-                                     "DYLD_INSERT_LIBRARIES": "/bad", "CX_BOTTLE": "wrong"}):
+                                     "DYLD_INSERT_LIBRARIES": "/bad", "CX_BOTTLE": "wrong",
+                                     "DXMT_METALFX_SPATIAL_SWAPCHAIN": "1",
+                                     "DXMT_CONFIG": "d3d11.metalSpatialUpscaleFactor=2;"}):
             env = environment(self.profile)
         self.assertEqual(env["WINEPREFIX"], self.profile["prefix"])
         self.assertTrue(env["DYLD_FALLBACK_LIBRARY_PATH"].startswith(self.profile["support"] + ":"))
-        for name in ("GITHUB_TOKEN", "DYLD_INSERT_LIBRARIES", "CX_BOTTLE"):
+        for name in ("GITHUB_TOKEN", "DYLD_INSERT_LIBRARIES", "CX_BOTTLE",
+                     "DXMT_METALFX_SPATIAL_SWAPCHAIN", "DXMT_CONFIG"):
             self.assertNotIn(name, env)
 
     def test_profile_traversal_and_shared_prefix_rejected(self):
