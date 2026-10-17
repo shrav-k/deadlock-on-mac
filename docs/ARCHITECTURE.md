@@ -20,7 +20,7 @@ must not be described as proof that the game works out of the box.
 | `diagnostics.py` | Read-only native dependency inspection, with explicit scope and unresolved libraries |
 | `performance.py` | Validated per-profile FPS cap, Wine synchronization and Metal HUD settings |
 | `displays.py` / `native/` | Named host displays, guest mapping, offline preparation and Play validation; no macOS display changes |
-| `game_settings.py` | Narrow, offline display edits with backups; preserves quality and render scale |
+| `game_settings.py` | Backed-up offline display/FPS/native-rendering edits and allowlisted graphics receipts; display edits preserve quality and render scale |
 | `game_mode.py` | Optional Apple-tool status, bounded system-wide Game Mode tests and recovery receipts |
 | `game_session.py` / `session_worker.py` | Detached normal-Play lifetime, per-user policy ownership, bottle matching and prior-policy recovery |
 | `telemetry.py` | Per-process Metal presentation-interval summaries, excluding other apps and warm-up |
@@ -202,3 +202,31 @@ tests; a Deadlock workaround must not silently become a default for every game.
 
 No organization migration, new repository or universal-game implementation is
 part of the current cleanup.
+
+### Next initiative: Elden Ring with Seamless Co-op
+
+The next recipe will exercise Elden Ring plus its optional Seamless Co-op
+integration alongside Deadlock. This is planned scope, not current compatibility
+or installation support. First verify the then-current upstream installation,
+launch and version requirements; do not infer them from Deadlock's Steam URI flow.
+
+Extract the existing behavior behind a tested `GameDefinition` before adding the
+second game: Steam app identity, executable/process ownership, settings/save
+adapters, launch strategy, dependencies and acceptance scenarios. Preserve the
+current Deadlock command defaults, profile identifiers and data with an explicit,
+versioned migration. Shared lifecycle, display, capture/input, Game Mode and
+telemetry services must receive a game definition rather than hardcoded paths.
+
+Model a mod as a separately versioned, optional recipe component with upstream
+provenance, verified artifacts, owned files and reversible install/update/remove
+operations. Keep user configuration, secrets and save data outside the recipe.
+Test official-game and mod launch routes independently; qualify their Steam
+session requirements before sharing a bottle or library. Do not duplicate large
+game installations merely to compare runtime candidates.
+
+Acceptance needs two layers: core contract tests for process isolation, display
+selection, policy restoration, backup/rollback and migration; then per-recipe
+installation, menu, clean exit, native-resolution visual checks and repeatable
+offline performance scenarios. Multiplayer/co-op acceptance is a separate later
+step. A Deadlock-specific DLL/config workaround must never become an implicit
+global override for the new game.

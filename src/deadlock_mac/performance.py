@@ -26,6 +26,16 @@ def settings_path(workspace, profile_id):
     return Path(workspace) / "DeadlockData/performance" / (identifier(profile_id) + ".json")
 
 
+def validate_for_profile(settings, profile):
+    validate(settings)
+    # The pinned CrossOver 26.3-derived Highball tree has MSync, but no ESync.
+    # Silently accepting WINEESYNC=1 would benchmark ordinary server sync while
+    # falsely labelling the result ESync. Recheck saved settings on every launch.
+    if profile.get("wine_family") == "highball" and settings["sync"] == "esync":
+        raise ManagerError("This Highball runtime does not include ESync. Select msync, none, or auto (engine default; MSync off).")
+    return settings
+
+
 def load(workspace, profile_id):
     path = settings_path(workspace, profile_id)
     if path.is_symlink():
@@ -41,7 +51,7 @@ def save(workspace, profile, settings, *, check_running=None):
         raise ManagerError("Configure the official CrossOver provider in CrossOver itself.")
     if (check_running or wine_processes_running)():
         raise ManagerError("Exit Windows Steam and all Wine bottles before changing performance settings.")
-    atomic_json(settings_path(workspace, profile["id"]), validate(settings))
+    atomic_json(settings_path(workspace, profile["id"]), validate_for_profile(settings, profile))
 
 
 def variables(settings):

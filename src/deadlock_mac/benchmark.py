@@ -10,7 +10,7 @@ import platform
 import subprocess
 import uuid
 
-from . import game_mode, game_session, hotfix, performance
+from . import game_mode, game_session, game_settings, hotfix, performance
 from .diagnostics import display_status, power_status
 from .runtime import clean_env, steam_path
 from .steam import game_status
@@ -76,6 +76,7 @@ def start(workspace, profile, scenario, resolution):
              "wine_hotfix": hotfix.status(profile), "macos": platform.mac_ver()[0],
              "architecture": platform.machine(), "game": game_status(steam_path(profile)),
              "performance_requested": performance.load(workspace, profile["id"]),
+             "graphics_before": game_settings.rendering_snapshot(profile),
              "before": snapshot()}
     atomic_json(folder(workspace) / (run_id + ".json"), state)
     return {"id": run_id, "pid": pid, "phase": "recording", "start_time": state["start_time"],
@@ -117,7 +118,14 @@ def finish(workspace, profile, run_id, warmup_seconds=0):
     report = {key: state[key] for key in ("schema", "id", "profile", "pid", "start_time", "scenario",
                                         "resolution_user_reported", "markers", "runtime_version", "dxmt_version",
                                         "wine_hotfix", "macos", "architecture", "game", "performance_requested", "before")}
+    graphics_before = state.get("graphics_before", {"available": False})
+    graphics_after = game_settings.rendering_snapshot(profile)
+    unchanged = (graphics_before["sha256"] == graphics_after["sha256"]
+                 and graphics_before.get("fps_limits") == graphics_after.get("fps_limits")
+                 if graphics_before.get("available") and graphics_after.get("available") else None)
     report.update(end_time=end, after=snapshot(), metrics=metrics,
+                  graphics_before=graphics_before, graphics_after=graphics_after,
+                  saved_graphics_unchanged=unchanged,
                   limitations="User-marked observation, not a deterministic benchmark. Power and Game Mode receipt sampled only at boundaries; not continuous thermal/GPU-utilization telemetry. Report includes loading/focus gaps unless excluded explicitly. Review free-text labels before sharing.")
     atomic_json(folder(workspace) / (run_id + "-report.json"), report)
     state.update(phase="finished", end_time=end)

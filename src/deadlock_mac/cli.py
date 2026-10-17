@@ -281,6 +281,8 @@ def main(argv=None):
     p.add_argument("--mode", choices=("fullscreen", "borderless"), default="fullscreen")
     p.add_argument("--width", type=int, default=1920)
     p.add_argument("--height", type=int, default=1080)
+    p = sub.add_parser("native-rendering", help="Preview or apply native 100%% custom rendering, preserving quality; Steam must be closed")
+    p.add_argument("--apply", action="store_true")
     p = sub.add_parser("game-fps", help="Preview or apply backed-up game/menu FPS limits; Steam must be closed")
     p.add_argument("--cap", type=int, default=60)
     p.add_argument("--menu-cap", type=int, default=60)
@@ -363,7 +365,7 @@ def main(argv=None):
                 profile = load_profile(workspace, path.stem)
                 print(f"{profile['id']}: {profile['provider']} / {profile.get('runtime_version', 'unknown')}")
             return 0
-        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "steam-exit", "setup", "backup", "performance", "graphics-preset", "wine-hotfix", "benchmark", "retina", "game-fps", "display", "visual"):
+        if args.command in ("doctor", "runtime-dependencies", "steam", "install", "launch", "exit", "steam-exit", "setup", "backup", "performance", "graphics-preset", "native-rendering", "wine-hotfix", "benchmark", "retina", "game-fps", "display", "visual"):
             if (args.command == "display" and not (args.prepare or args.clear or args.test_window)
                     and not profile_file(workspace, args.profile).exists()):
                 profile = {"id": args.profile}
@@ -429,6 +431,8 @@ def main(argv=None):
             elif args.command == "graphics-preset":
                 print(json.dumps(game_settings.configure(workspace, profile, apply=args.apply,
                                                         mode=args.mode, width=args.width, height=args.height), indent=2))
+            elif args.command == "native-rendering":
+                print(json.dumps(game_settings.configure_native(workspace, profile, apply=args.apply), indent=2))
             elif args.command == "retina":
                 print(json.dumps(wine_display.configure(workspace, profile, args.set,
                                                         apply=args.apply, restore=args.restore), indent=2))

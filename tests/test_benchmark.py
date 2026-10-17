@@ -54,6 +54,19 @@ class BenchmarkTests(unittest.TestCase):
         with self.assertRaisesRegex(ManagerError, "not recording"):
             benchmark.finish(self.root, {**self.profile, "id": "other"}, run["id"])
 
+    def test_graphics_drift_is_recorded_without_claiming_comparable_settings(self):
+        for after, expected in (({"available": True, "sha256": "first"}, True),
+                                ({"available": True, "sha256": "changed"}, False),
+                                ({"available": True, "sha256": "first", "fps_limits": {"fps_max": "120"}}, False),
+                                ({"available": False}, None)):
+            with patch.object(benchmark.game_settings, "rendering_snapshot", side_effect=[
+                    {"available": True, "sha256": "first"}, after]), \
+                    patch.object(benchmark, "summarize", return_value={}):
+                run = benchmark.start(self.root, self.profile, "native-low", "2560x1440")
+                report = benchmark.finish(self.root, self.profile, run["id"])
+                self.assertIs(report["saved_graphics_unchanged"], expected)
+                self.assertEqual(report["graphics_after"], after)
+
 
 class LogDiscoveryTests(unittest.TestCase):
     def test_redirected_stdout_uses_manager_stderr_without_reading_other_files(self):

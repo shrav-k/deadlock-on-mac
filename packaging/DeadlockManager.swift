@@ -533,7 +533,10 @@ struct ManagerSettingsView: View {
                 Button("Set game and menu limits to 60 FPS") {
                     model.run(["game-fps", "--cap", "60", "--menu-cap", "60", "--apply"], label: "Backing up and saving FPS limits…")
                 }
-                Text("Requires Windows Steam closed. Resolution, rendering quality and upscaling are separate settings; test them in the game after display qualification.")
+                Button("Use native rendering (100%, no upscaling)") {
+                    model.run(["native-rendering", "--apply"], label: "Backing up and saving native rendering…")
+                }
+                Text("Close Windows Steam before applying. Native rendering preserves resolution and quality, and uses custom settings so a preset cannot reapply reduced render scale. Verify 100% in the game; selecting a quality preset later can change it again.")
                     .font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
         }.disabled(model.running)

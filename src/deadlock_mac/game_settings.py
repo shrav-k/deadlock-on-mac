@@ -12,6 +12,55 @@ BALANCED_1080 = {"setting.defaultres": "1920", "setting.defaultresheight": "1080
                  "setting.fullscreen": "1", "setting.coop_fullscreen": "0",
                  "setting.nowindowborder": "0"}
 
+# Enabling custom settings prevents a named quality preset from reapplying its
+# reduced viewport scale. Quality, output size and ordinary AA remain untouched.
+NATIVE_RENDERING = {"setting.mat_viewportscale": "1", "setting.useadvanced": "1",
+                    "setting.r_citadel_upscaling": "0",
+                    "setting.r_citadel_dlss_settings_mode": "0"}
+
+
+def configure_native(workspace, profile, *, apply=False, check_running=None):
+    from .backup import wine_processes_running
+    running = check_running or wine_processes_running
+    if apply and running():
+        raise ManagerError("Exit Windows Steam and all Wine bottles before editing native rendering.")
+    path, original, video = plan(profile)
+    if not set(NATIVE_RENDERING).issubset(video):
+        raise ManagerError("Native-rendering keys are missing; use the game's graphics menu.")
+    changes = {key: {"before": video[key], "after": value} for key, value in NATIVE_RENDERING.items()}
+    note = "Native 100% custom rendering; verify 1x in game after launch. Quality and output resolution are preserved."
+    if not apply:
+        return {"applied": False, "changes": changes, "note": note}
+    return {**_write_changes(workspace, profile, path, original, NATIVE_RENDERING, changes, running), "note": note}
+
+
+def rendering_snapshot(profile):
+    """Allowlisted graphics values and a file hash, never account IDs or paths."""
+    try:
+        path, content, video = plan(profile)
+        import hashlib
+        keys = set(BALANCED_1080) | set(NATIVE_RENDERING) | {
+            "setting.monitor_index", "setting.high_dpi", "setting.mat_vsync",
+            "setting.r_citadel_antialiasing", "setting.r_citadel_ssao_quality",
+            "setting.r_citadel_shadow_quality", "setting.r_citadel_fog_quality",
+            "setting.r_texture_stream_mip_bias", "setting.shaderquality",
+            "setting.r_effects_bloom", "setting.r_post_bloom", "setting.r_depth_of_field",
+            "setting.r_arealights", "setting.r_particle_depth_feathering", "setting.r_low_latency"}
+        settings = {key: video[key] for key in sorted(keys) if key in video}
+        result = {"available": True, "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                  "settings": settings, "scope": "Saved configuration; verify actual rendering in game."}
+        fps_path = no_symlinks(path.with_name("machine_convars.vcfg"))
+        if fps_path.is_file() and fps_path.stat().st_size <= 256 * 1024:
+            config = parse_vdf(fps_path.read_text()).get("config")
+            fps = config.get("convars") if isinstance(config, dict) else None
+            if not isinstance(fps, dict):
+                fps = {}
+            result["fps_limits"] = {key: fps[key] for key in ("fps_max", "fps_max_ui")
+                                    if isinstance(fps.get(key), str) and fps[key].isdigit()}
+        return result
+    except (ManagerError, OSError, UnicodeError):
+        return {"available": False, "reason": "Saved graphics configuration is unavailable or unrecognized."}
+
 
 def video_file(profile):
     base = steam_path(profile).parent

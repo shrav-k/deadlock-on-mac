@@ -45,16 +45,45 @@ a saved cap is a ceiling, not a guarantee of minimum performance. We observed
 400/120 in the saved game settings while the manager was requesting a 60 FPS
 renderer limit, so the renderer request alone must not be reported as a verified cap.
 
-`--sync auto` preserves the engine default. It does not mean synchronization is off.
-`none`, `msync` and `esync` are explicit comparison options, requiring a full restart;
-no one mode is claimed to improve every game or engine. `performance --reset` removes
-these overrides on the next restart. Normal shader caches are preserved.
+`--sync auto` preserves the engine default. For the pinned Highball/CrossOver 26.3
+source, MSync is off unless `WINEMSYNC` is explicitly enabled. `none` and `msync`
+are comparison options, requiring a full restart. This Highball tree does not
+contain ESync, so the manager rejects `esync` instead of silently mislabelling an
+ordinary Wine server run. Other engines have separate capabilities; do not infer
+them from these names. No mode is claimed to improve every game. `performance
+--reset` removes overrides on the next restart. Normal shader caches are preserved.
+
+All helper processes now join Wine with the selected synchronization mode,
+including Exit, Steam shutdown and display probes. A live MSync test exposed that
+the previous Exit helper omitted `WINEMSYNC`, so Wine rejected it before Steam
+received the close request. This is covered by an environment regression test and
+verified normal game/Steam shutdown with Game Mode restoration.
 
 ## Display and quality
 
 Use [visual testing](VISUAL-TESTING.md) to inspect the actual frame and settings
 before a comparison. The [LG comparison plan](LG-OPTIMIZATION.md) separates image
 quality, output dimensions, render scale and runtime experiments.
+
+For native rendering, close Steam and use **Settings → Performance → Use native
+rendering** or the CLI:
+
+```sh
+python3 bin/deadlock-mac native-rendering          # preview
+python3 bin/deadlock-mac native-rendering --apply  # backup and apply
+```
+
+This sets 100% viewport scale, disables the tested upscaling modes and enables
+custom graphics settings, preserving output size, quality and ordinary antialiasing.
+The tested game shows **Stretch at 100%**; at 100% it does not enlarge a lower
+resolution image. Named Low/Medium presets can reapply reduced render scale, so
+recheck after choosing one. The command refuses unrecognized schemas and live Wine.
+It does not continuously overwrite the user's settings.
+
+Benchmark receipts record allowlisted saved graphics and FPS limits before/after,
+plus a video-file hash. `saved_graphics_unchanged: false` flags configuration drift;
+`null` means unavailable. An unchanged file does not prove the current in-memory
+rendering mode: inspect settings and the captured image as well.
 
 Reach the menu using the normal Steam launch before changing display settings.
 Choose a mode actually offered by the display and record the window

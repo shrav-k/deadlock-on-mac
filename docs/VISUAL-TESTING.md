@@ -105,6 +105,10 @@ crashed while exporting the time-profile table; CPU hotspot analysis remains
 unverified. Keep the trace and exporter crash report for follow-up.
 These checks qualify the observation/control workflow, not a performance claim:
 the pre-existing Low preset had `mat_viewportscale=0.5`, and no graphics settings
-were changed during this acceptance run. Resolve that conflict with the required
-native-rendering policy before using the run as a performance baseline. Raw images,
+were changed during this initial acceptance run. After explicit authorization,
+`native-rendering --apply` backed up that configuration and selected custom 100%
+rendering without changing quality or LG output. The game showed Stretch at 100%,
+and subsequent benchmark receipts contain before/after graphics and FPS limits.
+Those later runs form the native-rendering baseline; do not compare their FPS
+against the earlier half-scale run as if quality were unchanged. Raw images,
 action receipts and the trace remain private in the workspace.

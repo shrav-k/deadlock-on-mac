@@ -94,6 +94,15 @@ def environment(profile, tuning=None):
     env["WINEPREFIX"] = profile["prefix"]
     env["WINEDEBUG"] = "-all,err+all"
     if profile["provider"] == "wine":
+        # Every process joining a wineserver must use the same synchronization
+        # mode, including Exit, display probes, wineboot and diagnostics. These
+        # helpers do not inherit game-only HUD/frame-pacing settings.
+        from .performance import DEFAULTS, load, variables, validate_for_profile
+        if tuning is None:
+            workspace = Path(profile["prefix"]).parent.parent
+            saved = load(workspace, profile["id"])
+            tuning = dict(DEFAULTS, sync=saved["sync"])
+        validate_for_profile(tuning, profile)
         root = Path(profile["runtime"])
         dxmt = Path(profile["dxmt"])
         support = Path(profile["support"])
@@ -129,9 +138,7 @@ def environment(profile, tuning=None):
         overlay = active(profile)
         if overlay:
             env["WINEDLLPATH_PREPEND"] = str(overlay) + ":" + env["WINEDLLPATH_PREPEND"]
-        if tuning is not None:
-            from .performance import variables
-            env.update(variables(tuning))
+        env.update(variables(tuning))
     return env
 
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 — development
+
+- Add optional Steam Big Picture and permission-gated ScreenCaptureKit capture
+  with observed, bounded mouse/keyboard actions. Keep captures and account data
+  private; Big Picture focus and secondary-display qualification remain open.
+- Add backed-up native 100% rendering without changing output resolution or
+  quality. Record allowlisted graphics/FPS settings before and after benchmarks
+  to detect changes that invalidate comparisons.
+- Fix Wine shutdown/probe helpers joining an MSync server without the matching
+  synchronization setting. Reject unsupported ESync for the pinned Highball build.
+- Record native LG sandbox screening and clean shutdown checks. MSync did not
+  demonstrate a speed benefit; retain engine-default sync and the game's FPS cap.
+  Sustained-match performance and remaining frame-time spikes are not resolved.
+- Document shared launcher services and versioned game definitions for the next
+  Elden Ring/Seamless Co-op initiative; no second-game support is implemented yet.
+
 ## 0.4.5 — development
 
 - Backport the complete upstream WinMM conversion/format-enumeration series to

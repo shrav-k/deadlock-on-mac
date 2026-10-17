@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from deadlock_mac import performance, game_settings
+from deadlock_mac import performance, game_settings, game_exit, runtime
 from deadlock_mac.cli import bootstrap, setup
 from deadlock_mac.diagnostics import display_status, power_status
 from deadlock_mac.steam import parse_vdf
@@ -36,11 +36,96 @@ class PerformanceTests(unittest.TestCase):
         self.assertNotIn("DXMT_SHADER_CACHE", variables)
         self.assertNotIn("WINEMSYNC", variables)
 
+    def native_fixture(self):
+        values = {**game_settings.BALANCED_1080, **game_settings.NATIVE_RENDERING,
+                  "setting.mat_viewportscale": "0.5", "setting.useadvanced": "0",
+                  "setting.r_citadel_upscaling": "2", "setting.r_citadel_dlss_settings_mode": "1",
+                  "setting.r_citadel_shadow_quality": "0", "private": "do not export"}
+        self.video.write_bytes(('"video.cfg"\r\n{\r\n"Version" "20"\r\n' + ''.join(
+            f'"{key}" "{value}"\r\n' for key, value in values.items()) + '}\r\n').encode())
+        return self.video.read_bytes()
+
+    def test_native_rendering_preserves_quality_resolution_and_exact_backup(self):
+        original = self.native_fixture()
+        self.assertFalse(game_settings.configure_native(self.root, self.profile)["applied"])
+        self.assertEqual(original, self.video.read_bytes())
+        result = game_settings.configure_native(self.root, self.profile, apply=True, check_running=lambda: False)
+        self.assertEqual((Path(result["backup"]) / "video.txt").read_bytes(), original)
+        values = parse_vdf(self.video.read_text())["video.cfg"]
+        for key, value in game_settings.NATIVE_RENDERING.items():
+            self.assertEqual(values[key], value)
+        self.assertEqual(values["setting.r_citadel_shadow_quality"], "0")
+        self.assertEqual(values["setting.defaultres"], "1920")
+        self.assertEqual(self.video.read_bytes().count(b'\r\n'), original.count(b'\r\n'))
+
+    def test_native_rendering_refuses_missing_keys_live_wine_and_changed_file(self):
+        with self.assertRaisesRegex(ManagerError, "keys are missing"):
+            game_settings.configure_native(self.root, self.profile, apply=True, check_running=lambda: False)
+        original = self.native_fixture()
+        with self.assertRaisesRegex(ManagerError, "Exit Windows Steam"):
+            game_settings.configure_native(self.root, self.profile, apply=True, check_running=lambda: True)
+        self.assertEqual(original, self.video.read_bytes())
+        with self.assertRaisesRegex(ManagerError, "Wine started"):
+            game_settings.configure_native(self.root, self.profile, apply=True, check_running=iter([False, True]).__next__)
+        self.assertEqual(original, self.video.read_bytes())
+
+    def test_graphics_snapshot_omits_unknown_values_and_detects_changes(self):
+        self.native_fixture()
+        self.video.with_name("machine_convars.vcfg").write_text('"config" { "convars" { "fps_max" "120" "fps_max_ui" "60" "private" "secret" } }')
+        before = game_settings.rendering_snapshot(self.profile)
+        self.assertTrue(before["available"])
+        self.assertEqual(before["fps_limits"], {"fps_max": "120", "fps_max_ui": "60"})
+        self.assertNotIn("secret", json.dumps(before))
+        self.assertNotIn("do not export", json.dumps(before))
+        self.assertNotIn("userdata", json.dumps(before))
+        game_settings.configure_native(self.root, self.profile, apply=True, check_running=lambda: False)
+        self.assertNotEqual(before["sha256"], game_settings.rendering_snapshot(self.profile)["sha256"])
+        self.video.write_text('"video.cfg" { "Version" "21" }')
+        self.assertFalse(game_settings.rendering_snapshot(self.profile)["available"])
+
     def test_sync_off_is_explicit_and_modes_are_exclusive(self):
         for mode in ("none", "msync", "esync"):
             env = performance.variables(dict(performance.DEFAULTS, sync=mode))
             self.assertEqual(env["WINEMSYNC"], "1" if mode == "msync" else "0")
             self.assertEqual(env["WINEESYNC"], "1" if mode == "esync" else "0")
+
+    def test_highball_rejects_unsupported_esync_before_saving_or_launching(self):
+        profile = {**self.profile, "wine_family": "highball"}
+        settings = dict(performance.DEFAULTS, sync="esync")
+        with self.assertRaisesRegex(ManagerError, "does not include ESync"):
+            performance.save(self.root, profile, settings, check_running=lambda: False)
+        self.assertFalse(performance.settings_path(self.root, "test").exists())
+        with self.assertRaises(ManagerError):
+            performance.validate_for_profile(settings, profile)
+        self.assertEqual(performance.validate_for_profile(dict(settings, sync="msync"), profile)["sync"], "msync")
+
+    def test_msync_exit_and_probe_environment_matches_launch_without_game_hud(self):
+        support, dxmt, engine = (self.root / name for name in ("support", "dxmt", "engine"))
+        for path in (support / "libinotify.0.dylib", dxmt / "x86_64-unix/winemetal.so"):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        profile = {**self.profile, "wine_family": "highball", "support": str(support),
+                   "dxmt": str(dxmt), "runtime": str(engine)}
+        settings = dict(performance.DEFAULTS, sync="msync", metal_hud=True, hud_logging=True, fps_cap=60)
+        performance.save(self.root, profile, settings, check_running=lambda: False)
+        with patch("deadlock_mac.hotfix.active", return_value=None), \
+                patch("deadlock_mac.media_runtime.library_directory", return_value=None):
+            helper = runtime.environment(profile)
+            launch = runtime.environment(profile, settings)
+            self.assertEqual(helper["WINEMSYNC"], launch["WINEMSYNC"])
+            self.assertEqual(helper["WINEMSYNC"], "1")
+            self.assertEqual(helper["WINEESYNC"], "0")
+            for key in ("MTL_HUD_ENABLED", "MTL_HUD_LOG_ENABLED", "DXMT_CONFIG"):
+                self.assertNotIn(key, helper)
+                self.assertIn(key, launch)
+            with patch.object(game_exit.subprocess, "run") as run:
+                game_exit.send(profile, ["wine", "steam.exe", "-shutdown"], self.root / "shutdown.log")
+                self.assertEqual(run.call_args.kwargs["env"]["WINEMSYNC"], "1")
+            # Existing unsupported receipts must also fail at launch, not silently
+            # turn MSync off while claiming ESync was enabled.
+            performance.settings_path(self.root, profile["id"]).write_text(json.dumps(dict(settings, sync="esync")))
+            with self.assertRaisesRegex(ManagerError, "does not include ESync"):
+                runtime.environment(profile)
 
     def test_changes_require_closed_wine_and_preserve_previous_settings(self):
         performance.save(self.root, self.profile, dict(performance.DEFAULTS, fps_cap=60), check_running=lambda: False)
