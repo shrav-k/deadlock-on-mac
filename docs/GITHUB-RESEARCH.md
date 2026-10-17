@@ -20,6 +20,8 @@ performance reports are leads, not local Deadlock qualification.
 | [DXMT upstream](https://github.com/3Shain/dxmt/tree/50102f994b406f58f56d5d09f2ad20f9b90390a2), Oct 16 | D3D10/11-to-Metal implementation and renderer configuration; current LICENSE says LGPL-2.1-or-later | Primary source for renderer behavior and candidate revisions. Keep our currently paired renderer pinned until tests pass; licenses can differ by revision |
 | [Heroic](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/tree/509a34feea8541b73c928e289f2cf262d432db4a), Oct 15; GPL-3.0 | Mature multi-store frontend with runtime installation tests and separate backend/UI modules | Broader launcher design reference, not evidence that Deadlock works. Its GameMode setting is Linux-only Feral GameMode, not Apple's Game Mode |
 | [Gcenx/macOS_Wine_builds](https://github.com/Gcenx/macOS_Wine_builds/tree/8022307824e05272af7427a02ed61774e925871a) | Upstream macOS package channel used by several wrappers | Candidate runtime source, not a guarantee that the newest package has the patches needed by our DXMT pair. Inspect release assets separately from source-branch activity |
+| [Soju](https://github.com/BCD1210/soju/tree/f58ffb4682fea3c211a07cbeb6a7eaec44f1f715), Oct 16; GPL-3.0 | Documents Steam's main-loop stall during WinMM format enumeration and a Steam-only audio-driver diagnostic | This lead matched our captured Core Audio stacks and native reproducer. Preserve audio by qualifying the upstream WinMM fixes; do not adopt its mute workaround as a default |
+| [Mallow](https://github.com/mixutin/Mallow/tree/b5fbade527ea8ac8d54ee961154a288db43f58b1), Sep 27; own code 0BSD | Documents renderer selection, launcher/runtime boundaries and dependency-license inventory | Packaging/design reference. Third-party engine and renderer terms remain separate; no implementation was imported |
 
 The original [Whisky-App/Whisky](https://github.com/Whisky-App/Whisky) is archived;
 its source was last pushed in May 2025. Its recent repository activity/star count
@@ -105,6 +107,32 @@ only. Keep the verified Xcode-backed setup and its public/private-API distinctio
 investigate native Wine host eligibility separately.
 [Heroic GameMode source](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/blob/509a34feea8541b73c928e289f2cf262d432db4a/src/frontend/screens/Settings/components/GameMode.tsx),
 [our Apple setup findings](GAME-MODE-SETUP.md)
+
+### WinMM enumeration and Steam startup
+
+Soju's [Steam investigation](https://github.com/BCD1210/soju/blob/f58ffb4682fea3c211a07cbeb6a7eaec44f1f715/docs/STEAM-GAMES.md)
+provided a matching lead: old WinMM enumerates many formats for every audio device.
+Our stalled Steam samples independently showed `IPC:CSteamEngine` inside
+`winecoreaudio.so` / `AudioUnitSetProperty`. The matched Highball source still
+contained that probing loop. Temporarily disabling only Steam's audio driver let
+the game launch; restoring it reproduced the failure. That diagnostic was then
+removed and verified, not installed as a workaround.
+
+The relevant upstream series is
+[AUTOCONVERTPCM](https://github.com/wine-mirror/wine/commit/8b1e971fb9ef6948917a886ff406eec65f7403ac),
+[S_FALSE handling](https://github.com/wine-mirror/wine/commit/3eda8f91607d0f845c9d8a952c80cb9f00d8aeea),
+[conversion responsibility](https://github.com/wine-mirror/wine/commit/bb465ced5a31abe0cbcb1f3b8c6c078f6e8e99ee),
+and [removal of enumeration-time probing](https://github.com/wine-mirror/wine/commit/c3a1bc86134bd6ae4bd781f6ae79f98122ba5e98).
+The last patch depends on the preceding conversion behavior. Keep the complete
+series, matched engine ABI and both architectures; an earlier similar patch was
+reverted upstream because it broke non-PCM behavior.
+
+Our native reproducer stalled past its 45-second watchdog on the original DLL.
+The candidate enumerated in about 0.6 seconds on both architectures and passed
+silent playback/completion for 20 PCM formats, two float formats and mu-law,
+plus invalid-format rejection. These are API checks, not audible-quality or
+microphone acceptance. See [startup qualification](STARTUP-INVESTIGATION.md) for
+the separate live Steam/display results and outstanding gates.
 
 ## Consolidation priorities
 

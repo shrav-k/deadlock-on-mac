@@ -187,6 +187,19 @@ def build_staged(output, downloads, wine_hotfix=None):
             path = destination / name
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / name, path)
+        # The previous exit-only revision is a verified subset of this payload.
+        # Include it so a fresh installation can roll back without a compiler.
+        previous = hotfix.previous_specification()
+        if (previous['id'] != spec['id'] and previous['runtime_version'] == spec['runtime_version']
+                and all(spec['files'].get(name) == digest for name, digest in previous['files'].items())):
+            hotfix.verify(source, previous)
+            rollback = manager / 'runtime-overlays' / previous['id']
+            for name in (*previous['files'], 'COPYING.LIB'):
+                path = rollback / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source / name, path)
+            (rollback / 'provenance.json').write_text(json.dumps(
+                {**previous, 'bundled_from_verified_subset_of': spec['id']}, indent=2) + '\n')
     shutil.copyfile(REPO / "packaging/launcher.py", resources / "launcher.py")
     certificate = resources / "python/lib/python3.13/site-packages/pip/_vendor/certifi/cacert.pem"
     if not certificate.is_file():

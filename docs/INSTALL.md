@@ -48,6 +48,9 @@ mkdir -p ~/Projects/Games/Deadlock
 cd ~/Projects/Games/Deadlock
 git clone --branch maintain/free-steam-runtime-manager https://github.com/shrav-k/deadlock-on-mac.git
 cd deadlock-on-mac
+python3 bin/deadlock-mac runtime-install --runtime highball
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer python3 packaging/build_wine_hotfix.py \
+  --workspace "$PWD/.." --build-dir "$PWD/../Tools/wine-hotfix-build"
 python3 bin/deadlock-mac bootstrap
 python3 bin/deadlock-mac steam
 ```
@@ -61,6 +64,11 @@ checks their hashes, and extracts them under `../Runtimes`. `setup` initializes
 `../Bottles/highball` and installs the official Windows Steam client. Downloads, state,
 game files and backups stay outside this repository. macOS/Wine can still create
 ordinary per-user caches and preferences outside Games.
+
+The source sequence explicitly builds the pinned startup/exit fixes before Steam
+setup. The [hotfix guide](WINE-HOTFIX.md) covers build verification and rollback;
+do not repeat the build into an existing directory. A packaged preview containing
+these verified payloads needs no player-side compiler for this step.
 
 The [local app preview](../packaging/README.md) offers the same sequence with buttons
 and its own pinned Python runtime. Players using that app need no Homebrew, Git,

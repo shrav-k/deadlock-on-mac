@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.5 — development
+
+- Backport the complete upstream WinMM conversion/format-enumeration series to
+  the matched Wine build. A native reproducer isolated the Steam startup stall
+  outside Retina rendering; both Windows architectures pass silent PCM/float/
+  mu-law playback probes, and both displays pass repeated menu lifecycle checks.
+- Package verified startup and exit DLLs as one reversible overlay. Preserve
+  legacy receipts, explicit rollback and opt-out; include the exit-only payload
+  so fresh installs can roll back without building or downloading another engine.
+- Extend fresh packaged qualification to hotfix install/repeat/upgrade/rollback
+  alongside FFmpeg and fresh official-Xcode Game Mode discovery. Retain visual,
+  audible game audio, gameplay and external-display acceptance as separate gates.
+
 ## 0.4.4 — development
 
 - Show detached Play startup, delayed failure, process readiness and Game Mode

@@ -166,9 +166,9 @@ def bootstrap(workspace, name, family, game_mode_tool=None, without_game_mode=Fa
         create_profile(workspace, name, family=family)
     profile = load_profile(workspace, name)
     if hotfix.install_available(workspace, profile):
-        print("Verified Wine exit hotfix enabled for this profile.")
+        print(f"Verified Wine hotfix enabled: {hotfix.status(profile)['id']}.")
     elif hotfix.compatible(profile, hotfix.specification()):
-        print("Wine exit hotfix is not enabled. See docs/WINE-HOTFIX.md for the source build and activation procedure.")
+        print("Wine hotfix is not enabled. See docs/WINE-HOTFIX.md for the source build and activation procedure.")
     setup(workspace, profile)
 
 
@@ -231,8 +231,8 @@ def main(argv=None):
     sub.add_parser("setup", help="Initialize the free profile and install Windows Steam")
     sub.add_parser("exit", help="Close Deadlock normally, leave Steam open, and verify Game Mode restoration")
     sub.add_parser("steam-exit", help="Close Deadlock, restore Game Mode, then shut down this profile's Windows Steam")
-    p = sub.add_parser("wine-hotfix", help="Verify, enable or roll back the pinned exit fix; Steam must be closed to change it")
-    p.add_argument("--set", choices=("on", "off"))
+    p = sub.add_parser("wine-hotfix", help="Verify or select a pinned Wine hotfix; Steam must be closed to change it")
+    p.add_argument("--set", choices=("on", "off", "previous"), help="on selects current; previous restores the pinned exit-only revision")
     p = sub.add_parser("benchmark", help="Start, mark or finish a private gameplay measurement")
     p.add_argument("action", choices=("start", "mark", "finish"))
     p.add_argument("--run", help="Run ID returned by benchmark start")
@@ -394,7 +394,8 @@ def main(argv=None):
                     result = benchmark.finish(workspace, profile, args.run, args.warmup_seconds)
                 print(json.dumps(result, indent=2))
             elif args.command == "wine-hotfix":
-                result = hotfix.status(profile) if args.set is None else hotfix.configure(workspace, profile, args.set == "on")
+                result = hotfix.status(profile) if args.set is None else hotfix.configure(
+                    workspace, profile, args.set != "off", previous=args.set == 'previous')
                 print(json.dumps(result, indent=2))
             elif args.command == "bootstrap":
                 bootstrap(workspace, args.profile, args.runtime, args.game_mode_tool, args.without_game_mode)

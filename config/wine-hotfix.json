@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "id": "highball-exitfix-v1",
+  "id": "highball-hotfix-v2",
   "runtime_version": "highball-wine-20261006",
-  "status": "candidate; requires live Steam and Deadlock exit acceptance",
+  "status": "candidate; WinMM regression and Steam/display lifecycle qualification recorded in docs/STARTUP-INVESTIGATION.md",
   "inputs": {
     "wine": {
       "url": "https://media.codeweavers.com/pub/crossover/source/crossover-sources-26.3.0.tar.gz",
@@ -49,14 +49,20 @@
   },
   "backports": {
     "0001-d8aa0abfb592.patch": "12ef7853293b04728ed62343eb1a842755f28b06be590347b76ee4adeabc0533",
-    "0002-f38f3ac7708f.patch": "8a06b23266f8d5511534a4428deb97cdf8c1a0ebfa5584df5de6c6650df9d266"
+    "0002-f38f3ac7708f.patch": "8a06b23266f8d5511534a4428deb97cdf8c1a0ebfa5584df5de6c6650df9d266",
+    "0003-8b1e971fb9ef.patch": "c301f38e6483fe678d08ee0043dfd768be54a1ee1f481e5057c7d3f0fcc94229",
+    "0004-3eda8f91607d.patch": "74dccfa9262d895fc8ca057e4cdb52f365d3aa15c0273f3701db0bc2e623dd80",
+    "0005-bb465ced5a31.patch": "cf904b8e0a5e70f9fe066b1e40097d934a80abe35d4dd296cc623c1799d71b7d",
+    "0006-c3a1bc86134b.patch": "e5b4196d06a333b5c7b5ff9da52fff78eefab4e49ea9c8929ad5ba8e81caac0b"
   },
   "files": {
     "x86_64-windows/sechost.dll": "f16791a229e5214f5bc54b31423f5a97f89f33d7a859e92a31faa05a88a33eba",
-    "i386-windows/sechost.dll": "c147a1dcb2cb2aa42de4feb460c8858c083d60952bcb0fbbf7d171342e2705ed"
+    "i386-windows/sechost.dll": "c147a1dcb2cb2aa42de4feb460c8858c083d60952bcb0fbbf7d171342e2705ed",
+    "i386-windows/winmm.dll": "fe1557caedff16d37b1bf0376b41339a01841b10a51a17fc2df769410f4fa88b",
+    "x86_64-windows/winmm.dll": "d0eb0f9325906c110f20b8a1df96bd6eed553858a0c9ff61cfd3b89f434d2c5f"
   },
   "source_date_epoch": 1791303436,
   "license": "LGPL-2.1-or-later",
-  "host_sdk_tested": "macOS 26.5 Command Line Tools",
-  "scope": "sechost.dll only, x86_64 and i386; engine and renderer are unchanged"
+  "host_sdk_tested": "Xcode 27.1 (27A9275), macOS SDK 27.0, Apple clang 21.0.0",
+  "scope": "sechost.dll and winmm.dll, x86_64 and i386; matched engine ABI; original engine and renderer remain unchanged"
 }

@@ -29,6 +29,11 @@ sidebar and standard app menu. Diagnostic cancellation uses a private EOF pipe;
 it does not send termination signals to Wine descendants. Automated AppKit tests
 include a real child process as well as the worker, so cleanup order is exercised.
 
+Version 0.4.5 bundles the matched WinMM startup fix with the existing exit fix.
+Fresh setup and explicit upgrades verify the payload before activation. The pinned
+exit-only revision remains available with `wine-hotfix --set previous`; explicit
+rollback and opt-out survive setup. See [the qualification record](../docs/STARTUP-INVESTIGATION.md).
+
 The SwiftUI app runs the same Python manager as the CLI. Its pinned Apple Silicon
 Python distribution and certificate store are bundled, while Wine, DXMT and Steam
 are downloaded separately. The app never bundles game files or Steam account data.
@@ -38,7 +43,7 @@ Build on Apple Silicon with Python 3.12+ and Xcode command-line tools:
 ```sh
 python3 packaging/build_app.py \
   --output '../Builds/Deadlock Manager.app' --downloads ../Downloads \
-  --wine-hotfix ../Runtimes/highball-exitfix-v1 --replace
+  --wine-hotfix ../Runtimes/highball-hotfix-v2 --replace
 ```
 
 Use this one stable preview path for local iteration. Omit `--wine-hotfix` if the
@@ -169,7 +174,7 @@ paired with the Highball runtime version rather than injected into other provide
 ## Include the reviewed exit overlay
 
 After following [the source build guide](../docs/WINE-HOTFIX.md), add
-`--wine-hotfix ../Runtimes/highball-exitfix-v1` to the app build command. The builder
+`--wine-hotfix ../Runtimes/highball-hotfix-v2` to the app build command. The builder
 verifies the DLL hashes and includes license/provenance. Fresh bootstrap stages
 that payload and enables it before Steam starts, while honoring explicit rollback.
 A source-only preview without this option does not include the hotfix. Public

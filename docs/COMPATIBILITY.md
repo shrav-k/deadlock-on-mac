@@ -528,3 +528,37 @@ Exit Windows Steam and Quit Manager completed. A silent-launch candidate also
 failed. Both Steam engine thread samples point into Core Audio device setup,
 which is now the next investigation; Retina On is not a required trigger. The
 earlier passing cycles remain valid lifecycle observations, not a hang fix.
+
+
+## 0.4.5 WinMM startup fix — 2026-10-16
+
+The repeated startup stall was isolated to legacy WinMM audio enumeration, not
+Retina On: it also failed on the LG, original WinMM failed a standalone 45-second
+watchdog, and an upstream four-patch candidate enumerated in about 0.6 seconds.
+Both Windows architectures passed 23 silent playback formats, mixer closure and
+invalid-format rejection. Two separate candidate builds were byte-identical;
+the final integrated recipe also produced all four DLLs matching reviewed hashes.
+The existing exit-only DLL bytes are unchanged. No Steam audio muting, renderer
+replacement, synchronization override or host display change is installed.
+
+Five candidate cold cycles passed (two LG, three built-in), followed by actual
+packaged manager Play/Exit/Steam Exit/Quit on built-in Retina and a packaged LG
+cycle. All restored `auto` and closed normally without orphan-overlay recovery.
+A process memory map confirmed the candidate WinMM loaded in Steam. Prepared
+outputs were 3024×1964 built-in / 2560×1440 LG; these remain distinct from current
+visual/input acceptance. The LG target was restored at the end.
+
+The 0.4.5 preview bundles both the current overlay and verified exit-only rollback.
+Fresh packaged qualification passes install/repeat/legacy upgrade/explicit
+rollback/opt-out, FFmpeg and uncached official Xcode discovery. Python regression
+coverage is 219 tests. Native AppKit lifecycle tests remain passing. The original
+engine and v1 payload are retained; an explicit rollback is preserved by setup.
+The [startup investigation](STARTUP-INVESTIGATION.md) links private per-run evidence.
+
+Game/Steam windows remain unavailable to the computer-use service. Their current
+screenshots, pointer/focus checks, audible audio and gameplay performance are not
+qualified. The actual manager Play view was inspected visually; offscreen fixture
+renders cover other views without claiming a complete interactive walkthrough.
+The menu telemetry capture includes startup/focus gaps and is not a gameplay
+benchmark. Keep Steam's desktop interface as default; Big Picture is an optional
+UX experiment, not a demonstrated performance optimization.

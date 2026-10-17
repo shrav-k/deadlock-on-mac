@@ -15,7 +15,7 @@ real test case; keep authentication, Wine and renderer adapters separate.
 | Layer | Required evidence | Current automation |
 | --- | --- | --- |
 | Manager | Safe extraction/downloads, state isolation, rollback, lifecycle/recovery, telemetry filtering | Python unit suite on macOS/Linux, Python 3.12/3.13; Swift type-check and quit-policy tests |
-| Build/provenance | Pinned source/toolchain/patches, ABI, hashes, licenses | Reviewed sechost overlay recipe; full engine reproduction still open |
+| Build/provenance | Pinned source/toolchain/patches, ABI, hashes, licenses | Reviewed sechost/WinMM overlay recipe and native regression probes; full engine reproduction still open |
 | Windows APIs | Valid/invalid device handles in 32/64-bit, correct errors, no unhandled fault | Native notification probes |
 | Rendering | Hardware adapter, D3D11 device/swapchain, repeated present | Native 120-frame probe; not a shader correctness suite |
 | Steam | Fresh install, update, login/Guard, library, download, cold/warm restart | Valve UI acceptance plus opt-in `check_lifecycle.py --steam-only` idle/shutdown checks |

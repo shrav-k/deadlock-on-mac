@@ -95,6 +95,38 @@ def qualify_game_mode(workspace, apple_tool=None, require_xcode=None):
     return result
 
 
+def qualify_hotfix(workspace, resources):
+    """Install/upgrade/rollback the bundled bytes in an empty, non-Wine workspace."""
+    from pathlib import Path
+    import json
+    from deadlock_mac import hotfix
+    from deadlock_mac.storage import atomic_json
+
+    workspace, resources = Path(workspace), Path(resources)
+    inputs = json.loads((resources / 'build-inputs.json').read_text())
+    if not inputs.get('wine_hotfix'):
+        return {'packaged_hotfix': 'not bundled; not qualified'}
+    current, previous = hotfix.specification(), hotfix.previous_specification()
+    profile = {'id': 'fresh', 'provider': 'wine', 'wine_family': 'highball',
+               'runtime_version': current['runtime_version'], 'prefix': str(workspace / 'Bottles/fresh')}
+    assert hotfix.install_available(workspace, profile)
+    assert hotfix.status(profile)['id'] == current['id']
+    assert hotfix.install_available(workspace, profile)
+    assert hotfix.configure(workspace, profile, True, previous=True)['id'] == previous['id']
+    assert hotfix.install_available(workspace, profile)  # Explicit rollback survives setup.
+    assert hotfix.status(profile)['id'] == previous['id']
+    # A legacy receipt without an explicit pin upgrades on requested setup.
+    atomic_json(hotfix.receipt(workspace, profile), {'schema': 1, 'enabled': True, 'id': previous['id']})
+    assert hotfix.install_available(workspace, profile)
+    assert hotfix.status(profile)['id'] == current['id']
+    assert not hotfix.configure(workspace, profile, False)['enabled']
+    assert not hotfix.install_available(workspace, profile)
+    assert hotfix.configure(workspace, profile, True)['id'] == current['id']
+    assert not (workspace / 'Bottles').exists()
+    return {'packaged_hotfix': 'fresh/repeat/upgrade/rollback/opt-out passed',
+            'hotfix_revision': current['id'], 'rollback_revision': previous['id']}
+
+
 # Executed by the app's own isolated interpreter, using only its shipped modules.
 PROBE = r'''
 import json, sys
@@ -112,6 +144,7 @@ assert not (workspace / 'Downloads').exists(), 'Packaged install unexpectedly fe
 assert not (workspace / 'Bottles').exists()
 result = {'packaged_media': 'passed', 'repeat_install': 'passed', 'source_checkout_required': False,
           'network_or_compiler_required': False, 'steam_or_game_started': False}
+result.update(qualify_hotfix(workspace, resources))
 result.update(qualify_game_mode(workspace, **options))
 print(json.dumps(result))
 '''
@@ -132,7 +165,7 @@ def check(app, report, apple_tool=None, require_xcode=None):
         workspace.mkdir()
         options = {key: str(value.resolve(strict=True)) if value else None for key, value in
                    (('apple_tool', apple_tool), ('require_xcode', require_xcode))}
-        probe = inspect.getsource(qualify_game_mode) + '\n' + PROBE
+        probe = inspect.getsource(qualify_game_mode) + '\n' + inspect.getsource(qualify_hotfix) + '\n' + PROBE
         command = [str(python), '-I', '-B', '-c', probe, str(resources), str(workspace), json.dumps(options)]
         run = subprocess.run(command, env=env, text=True, capture_output=True, timeout=120)
         if run.returncode:

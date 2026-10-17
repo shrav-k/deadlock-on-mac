@@ -607,12 +607,17 @@ struct ManagerDiagnosticsView: View {
                 }
             }.padding(.top, 8).disabled(model.running)
         }
-        DisclosureGroup("Wine exit hotfix") {
+        DisclosureGroup("Wine startup and exit fixes") {
             HStack {
-                Button("Check") { model.run(["wine-hotfix"], label: "Verifying Wine exit hotfix…") }
-                Button("Enable") { model.run(["wine-hotfix", "--set", "on"], label: "Enabling verified hotfix…") }
-                Button("Roll Back") { model.run(["wine-hotfix", "--set", "off"], label: "Disabling hotfix…") }
+                Button("Check") { model.run(["wine-hotfix"], label: "Verifying Wine fixes…") }
+                Menu("Change Version") {
+                    Button("Use Current Fixes") { model.run(["wine-hotfix", "--set", "on"], label: "Enabling verified startup and exit fixes…") }
+                    Button("Restore Exit-Only Fix") { model.run(["wine-hotfix", "--set", "previous"], label: "Restoring the exit-only revision…") }
+                    Button("Disable All Fixes") { model.run(["wine-hotfix", "--set", "off"], label: "Disabling Wine fixes…") }
+                }
             }.padding(.top, 8).disabled(model.running)
+            Text("Close Windows Steam before changing versions. Explicit rollback and disabled choices are preserved during setup.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         DisclosureGroup("Timed Game Mode diagnostic") {
             Button("Test for Five Minutes") { model.gameMode(["--test", "--seconds", "300"]) }

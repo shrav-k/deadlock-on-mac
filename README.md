@@ -36,9 +36,14 @@ Place the repository inside `Projects/Games/Deadlock`. Requires Apple Silicon, m
 Rosetta 2 and Python 3.12+. Source setup also needs Apple's Command Line Tools to
 build pinned media libraries. Default Game Mode requires a compatible Apple tool
 from Xcode; setup discovers and validates it automatically. The packaged app
-includes the media payload and needs no compiler. Review [security boundaries](SECURITY.md), then:
+includes the media and Wine hotfix payloads and needs no compiler. For a source
+installation, build the pinned startup/exit fixes before Steam setup. Review
+[security boundaries](SECURITY.md) and [build/rollback details](docs/WINE-HOTFIX.md), then:
 
 ```sh
+python3 bin/deadlock-mac runtime-install --runtime highball
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer python3 packaging/build_wine_hotfix.py \
+  --workspace "$PWD/.." --build-dir "$PWD/../Tools/wine-hotfix-build"
 python3 bin/deadlock-mac bootstrap
 python3 bin/deadlock-mac steam
 ```

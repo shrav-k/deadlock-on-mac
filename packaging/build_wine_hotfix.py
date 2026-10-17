@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build only the matching Wine sechost DLLs from pinned sources and patches.
+"""Build only the matching Wine hotfix DLLs from pinned sources and patches.
 
 Does not activate the result, modify a bottle, or replace the original engine.
 Requires macOS Command Line Tools; build directories are deliberately append-only.
@@ -16,12 +16,15 @@ import sys
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 from deadlock_mac.hotfix import specification, verify
-from deadlock_mac.storage import ManagerError, download, private_dir, sha256, unpack, atomic_json
+from deadlock_mac.storage import ManagerError, download, private_dir, sha256, unpack, atomic_json, no_symlinks
 
 
-def build(workspace, directory):
+def build(workspace, directory, output=None):
     spec = specification()
-    output = workspace / "Runtimes" / spec["id"]
+    modules = sorted({Path(name).stem for name in spec['files']})
+    if not modules or set(modules) - {'sechost', 'winmm'}:
+        raise ManagerError('Unreviewed hotfix module; update the recipe and qualification first.')
+    output = no_symlinks(output if output is not None else workspace / "Runtimes" / spec["id"])
     if directory.exists() or output.exists():
         raise ManagerError("Use a new build directory and preserve/move any existing hotfix output first.")
     private_dir(directory)
@@ -51,7 +54,7 @@ def build(workspace, directory):
 
         # Include ALL Highball patches, especially its GS-slot Get/SetLastError ABI.
         for folder, items, include in ((patches, spec["highball_patches"], []),
-                                      (REPO / "patches/wine", spec["backports"], ["--include=dlls/sechost/service.c"])):
+                                      (REPO / "patches/wine", spec["backports"], ["--include=dlls/sechost/service.c", "--include=dlls/winmm/waveform.c"])):
             for name, digest in items.items():
                 patch = folder / name
                 if sha256(patch) != digest:
@@ -74,11 +77,12 @@ def build(workspace, directory):
         run(["/usr/bin/make", "-j6", f"x86_64_CFLAGS={flags}", f"i386_CFLAGS={flags}",
              "x86_64_LDFLAGS=--no-default-config -fms-hotpatch -Wl,--build-id=none",
              "i386_LDFLAGS=--no-default-config -fms-hotpatch -Wl,--disable-stdcall-fixup -Wl,--build-id=none",
-             "dlls/sechost/all"])
+             *[f"dlls/{module}/all" for module in modules]])
         stage = private_dir(directory / "output")
         for name in spec["files"]:
-            built = build_dir / "dlls/sechost" / name
-            target = private_dir((stage / name).parent) / "sechost.dll"
+            module = Path(name).stem
+            built = build_dir / f"dlls/{module}" / name
+            target = private_dir((stage / name).parent) / Path(name).name
             shutil.copyfile(built, target)
             run([compiler / "llvm-strip", "--strip-debug", target])
             if b"/Users/" in target.read_bytes():
@@ -93,6 +97,7 @@ def build(workspace, directory):
         verify(stage, spec)
         shutil.copyfile(source / "COPYING.LIB", stage / "COPYING.LIB")
         atomic_json(stage / "provenance.json", spec)
+        private_dir(output.parent)
         stage.rename(output)
     print(f"Built and verified: {output}. Not activated; run both native probes before live testing.")
 
@@ -101,5 +106,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--build-dir", type=Path, required=True)
+    parser.add_argument('--output', type=Path, help='Optional new qualification directory; never overwrites or activates it')
     args = parser.parse_args()
-    build(args.workspace.expanduser().resolve(), args.build_dir.expanduser().resolve())
+    build(args.workspace.expanduser().resolve(), args.build_dir.expanduser().resolve(),
+          args.output.expanduser().absolute() if args.output else None)
