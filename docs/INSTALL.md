@@ -33,6 +33,32 @@ dependency setup in an empty workspace on 2026-10-16, without an existing tool/c
 Other Xcode/macOS pairs require the same check. See the [Game Mode setup decision](GAME-MODE-SETUP.md)
 for evidence, the public native alternative and the remaining release gates.
 
+## Steam fullscreen interface
+
+In the manager's Play view, choose **Steam → Open Big Picture**, or run
+`python3 bin/deadlock-mac steam --big-picture`. This opens the existing Windows
+Steam account in Valve's fullscreen interface using `steam://open/gamepadui`. **Open Windows
+Steam** keeps the normal desktop launch action; no persistent startup preference
+is changed. **Exit Windows Steam** closes either interface through the same verified
+shutdown path.
+
+Big Picture's display selection is separate from the manager's Deadlock display
+picker. Verify its monitor, coverage, pointer alignment and Command–Tab before
+using it on a new display. This is an optional interface under qualification,
+not a game performance setting. Continue using the manager's **Play** for its
+automatic Game Mode session; starting games directly inside Steam does not start
+that watcher. Opening Steam alone leaves the Game Mode policy unchanged.
+
+Valve documents the startup-only `-gamepadui` flag in its
+[Big Picture announcement](https://store.steampowered.com/news/posts/?enddate=1671645631&feed=steam_blog).
+Neither that flag nor the legacy `steam://open/bigpicture` URI produced a mode
+transition from an already-running desktop client in local testing. The current
+`steam://open/gamepadui` URI did: Steam logged UIMode 4 and creation of its gamepad
+interface. This URI also appears in
+[Valve's client issue tracker](https://github.com/ValveSoftware/steam-for-linux/issues/12056).
+Log transitions and clean process exit do not establish fullscreen coverage,
+pointer alignment or focus recovery; those still need an unlocked visual check.
+
 ## Source installation
 
 Requirements: Apple Silicon, macOS 15 or newer, Rosetta 2, Python 3.12 or newer,

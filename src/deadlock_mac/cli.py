@@ -243,6 +243,8 @@ def main(argv=None):
     for action in ("steam", "install", "launch"):
         p = sub.add_parser(action)
         p.add_argument("--dry-run", action="store_true", help="Print argv without executing anything")
+        if action == "steam":
+            p.add_argument("--big-picture", action="store_true", help="Open Steam's fullscreen Big Picture interface; does not change the game display or Game Mode")
         if action == "launch":
             p.add_argument("--game-mode-tool", type=Path, help="Compatible Apple-signed gamepolicyctl for the Play session")
             p.add_argument("--without-game-mode", action="store_true", help="Explicitly launch without a Game Mode session")
@@ -365,7 +367,7 @@ def main(argv=None):
             print(json.dumps(doctor(workspace, profile), indent=2))
             return 0
         if getattr(args, "dry_run", False):
-            print(json.dumps({"argv": launch_command(profile, args.command),
+            print(json.dumps({"argv": launch_command(profile, "steam-big-picture" if getattr(args, "big_picture", False) else args.command),
                               "performance_requested": performance.load(workspace, profile["id"]),
                               "game_mode_session": args.command == "launch" and not args.without_game_mode,
                               "provider": profile["provider"], "executes": False}, indent=2))
@@ -449,8 +451,11 @@ def main(argv=None):
                     print("You can close the manager. Use game-mode --session to check startup, exit and restoration.")
                     print(f"Watcher log: {log.with_suffix('.watcher.log')}")
                 else:
-                    pid = start(profile, args.command, log, tuning)
+                    action = "steam-big-picture" if getattr(args, "big_picture", False) else args.command
+                    pid = start(profile, action, log, tuning)
                     print(f"Request sent to Windows Steam (launcher PID {pid}).")
+                    if action == "steam-big-picture":
+                        print("Big Picture requested. Verify Steam's display and fullscreen coverage. Use the manager's Play for automatic Game Mode.")
                 print(f"Private log: {log}")
                 print("Check Steam for login, updates or Cloud conflicts. This is not proof of a successful game launch.")
         return 0

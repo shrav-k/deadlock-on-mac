@@ -29,7 +29,11 @@ sidebar and standard app menu. Diagnostic cancellation uses a private EOF pipe;
 it does not send termination signals to Wine descendants. Automated AppKit tests
 include a real child process as well as the worker, so cleanup order is exercised.
 
-Version 0.4.5 bundles the matched WinMM startup fix with the existing exit fix.
+Version 0.4.6 adds an optional **Steam → Open Big Picture** action to the Play view.
+Normal desktop launch remains available, with no persistent Steam preference
+change. Fullscreen coverage and focus remain display-specific qualification gates.
+
+The app bundles the matched WinMM startup fix with the existing exit fix.
 Fresh setup and explicit upgrades verify the payload before activation. The pinned
 exit-only revision remains available with `wine-hotfix --set previous`; explicit
 rollback and opt-out survive setup. See [the qualification record](../docs/STARTUP-INVESTIGATION.md).

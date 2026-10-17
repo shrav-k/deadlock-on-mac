@@ -348,6 +348,9 @@ final class ManagerModel: ObservableObject {
                                     "game-mode": "Game Mode operation finished. Check the policy in Details."]
                     self.status = code == 0 ? (messages[command.first ?? ""] ?? "Check complete.")
                         : "This step could not finish. See details below (code \(code))."
+                    if code == 0 && command == ["steam", "--big-picture"] {
+                        self.status = "Big Picture requested. Verify Steam's display and fullscreen coverage. Use this manager's Play for automatic Game Mode."
+                    }
                     if code == 0 && command == ["display"] { self.readDisplayReport() }
                     let refreshPreparedDisplay = self.preparationCompleted(command, success: code == 0)
                     self.finished(success: code == 0)
@@ -419,6 +422,7 @@ struct PlayView: View {
                 Button("Exit Deadlock") { model.run(["exit"], label: "Asking Steam to close Deadlock…") }
                 Menu("Steam") {
                     Button("Open Windows Steam") { model.run(["steam"], label: "Opening Steam…") }
+                    Button("Open Big Picture") { model.run(["steam", "--big-picture"], label: "Opening Steam Big Picture…") }
                     Button("Exit Windows Steam") { model.run(["steam-exit"], label: "Closing Deadlock and Windows Steam…") }
                 }.fixedSize()
             }.controlSize(.large).disabled(model.running)

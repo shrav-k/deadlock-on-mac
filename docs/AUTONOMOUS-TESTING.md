@@ -156,8 +156,10 @@ already support PID-filtered logging and timestamped scene markers.
 Steam fullscreen is a separate UX candidate. Valve describes
 [Big Picture](https://store.steampowered.com/bigpicture/) as a TV/controller interface;
 it is not evidence of faster Deadlock rendering. Keep the current desktop client
-default. Qualify optional Big Picture on both displays, focus recovery and exit
-before exposing it as a launcher preference, without altering the game profile.
+default. The optional **Steam → Open Big Picture** action (`steam --big-picture`)
+requests Valve's `steam://open/gamepadui` interface in the existing bottle. Qualify it on both
+displays, focus recovery and exit before promoting it to a persistent launcher
+preference. It does not alter the game profile or start a Game Mode watcher.
 
 Current startup findings and outstanding uncertainty are recorded in
 [the Retina investigation](STARTUP-INVESTIGATION.md).

@@ -11,7 +11,7 @@ import zipfile
 
 from deadlock_mac.backup import snapshot, wine_processes_running
 from deadlock_mac.catalog import artifacts, catalog
-from deadlock_mac.cli import create_profile, doctor, load_profile
+from deadlock_mac.cli import create_profile, doctor, load_profile, main
 from deadlock_mac.diagnostics import engine_dependencies
 from deadlock_mac.runtime import clean_env, environment, launch_command, start, validate_profile
 from deadlock_mac.steam import parse_vdf, game_status
@@ -45,7 +45,8 @@ class WorkspaceTest(unittest.TestCase):
 
     def test_every_action_goes_through_steam_with_argv(self):
         for action, uri in (("launch", "steam://rungameid/1422450"),
-                            ("install", "steam://install/1422450"), ("steam", "steam://open/main")):
+                            ("install", "steam://install/1422450"), ("steam", "steam://open/main"),
+                            ("steam-big-picture", "steam://open/gamepadui")):
             command = launch_command(self.profile, action)
             self.assertEqual(command[1:], [str(self.steam), uri])
             with patch("deadlock_mac.runtime.subprocess.Popen") as popen:
@@ -54,6 +55,28 @@ class WorkspaceTest(unittest.TestCase):
                 self.assertEqual(popen.call_args.args[0], command)
                 self.assertNotIn("shell", popen.call_args.kwargs)
                 self.assertEqual(popen.call_args.kwargs["cwd"], self.profile["prefix"])
+
+    def test_big_picture_cli_preserves_game_display_and_game_mode(self):
+        atomic_json(self.root / "DeadlockData/profiles/free.json", self.profile)
+        for flags, expected in (([], "steam"), (["--big-picture"], "steam-big-picture")):
+            with self.subTest(flags=flags), patch("deadlock_mac.cli.start", return_value=123) as launch, \
+                 patch("deadlock_mac.cli.game_session.launch_session") as session, \
+                 patch("deadlock_mac.cli.displays.validate_launch") as display, \
+                 patch("sys.stdout", new_callable=io.StringIO):
+                self.assertEqual(main(["--workspace", str(self.root), "--profile", "free", "steam", *flags]), 0)
+                self.assertEqual(launch.call_args.args[1], expected)
+                session.assert_not_called()
+                display.assert_not_called()
+
+    def test_big_picture_dry_run_executes_nothing(self):
+        atomic_json(self.root / "DeadlockData/profiles/free.json", self.profile)
+        with patch("deadlock_mac.cli.start") as launch, patch("sys.stdout", new_callable=io.StringIO) as output:
+            self.assertEqual(main(["--workspace", str(self.root), "--profile", "free", "steam", "--big-picture", "--dry-run"]), 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["argv"][1:], [str(self.steam), "steam://open/gamepadui"])
+        self.assertFalse(report["executes"])
+        self.assertFalse(report["game_mode_session"])
+        launch.assert_not_called()
 
     def test_immediate_loader_failure_is_not_reported_as_launch_success(self):
         with patch("deadlock_mac.runtime.subprocess.Popen") as popen:
@@ -308,6 +331,8 @@ class WorkspaceTest(unittest.TestCase):
                        runtime=str(self.root / "CrossOver.app"))
         self.assertEqual(launch_command(profile, "launch"), [str(cx), "--bottle",
                          profile["prefix"], "steam://rungameid/1422450"])
+        self.assertEqual(launch_command(profile, "steam-big-picture"), [str(cx), "--bottle",
+                         profile["prefix"], "steam://open/gamepadui"])
         with patch("deadlock_mac.runtime.verify_crossover", side_effect=ManagerError("bad signature")):
             with patch("deadlock_mac.runtime.subprocess.Popen") as popen:
                 with self.assertRaises(ManagerError):

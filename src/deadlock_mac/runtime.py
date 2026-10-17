@@ -8,7 +8,8 @@ import json
 from .storage import ManagerError, identifier, no_symlinks
 
 APP_ID = "1422450"
-URIS = {"steam": "steam://open/main", "install": f"steam://install/{APP_ID}",
+URIS = {"steam": "steam://open/main", "steam-big-picture": "steam://open/gamepadui",
+        "install": f"steam://install/{APP_ID}",
         "launch": f"steam://rungameid/{APP_ID}"}
 
 
@@ -144,6 +145,8 @@ def launch_command(profile, action):
             raise ManagerError("CrossOver cxstart is missing.")
         return [str(cxstart), "--bottle", profile["prefix"], URIS[action]]
     # Steam receives its normal protocol URL. Deadlock.exe is never invoked directly.
+    # The current gamepadui URI also switches a running client. The startup flag
+    # and legacy open/bigpicture URI did not switch the inspected desktop client.
     return [str(wine_binary(profile)), str(steam), URIS[action]]
 
 
