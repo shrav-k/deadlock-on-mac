@@ -31,6 +31,9 @@ jobs:
       - name: Compile pinned display helpers (no Wine or game execution)
         if: matrix.os == 'macos-14' && matrix.python == '3.13'
         run: python packaging/build_display_tools.py --output "$RUNNER_TEMP/display-tools" --downloads "$RUNNER_TEMP/downloads"
+      - name: Compile standard-ABI D3D12 GPU probe (no Wine or game execution)
+        if: matrix.os == 'macos-14' && matrix.python == '3.13'
+        run: python packaging/build_d3d12_probe.py --output "$RUNNER_TEMP/d3d12-probe" --downloads "$RUNNER_TEMP/downloads"
   app-integration:
     runs-on: macos-15
     steps:
