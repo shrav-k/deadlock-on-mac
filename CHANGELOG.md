@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a standard-ABI D3D12 GPU readback/presentation probe, pinned compiler build
+  and CI compilation gate. Record isolated free-renderer qualification without
+  changing Deadlock's installed renderer or enabling unqualified Elden Ring Play.
+
 - Extract shared Wine/provider and Steam services with legacy import compatibility;
   move Deadlock graphics, data and SDL paths into a reviewed game adapter.
 - Add versioned Deadlock and research-only Elden Ring Seamless Co-op definitions,

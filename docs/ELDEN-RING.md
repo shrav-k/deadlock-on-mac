@@ -3,6 +3,11 @@
 Reviewed 2026-10-17. This is a requirements record, not a macOS compatibility pass.
 The current working Deadlock prefix, DXMT build and configuration are preserved.
 
+Follow-up: [free D3D12 qualification](D3D12-RESEARCH.md) records passing
+Highball/D3DMetal 4.0b2 shader/readback/presentation probes, a reproducible ABI
+failure in the tested VKD3D fork, exact package pins, and remaining game gates.
+These results do not enable the Elden Ring research recipe's Play action.
+
 ## Rendering and runtime
 
 Elden Ring is Steam app **1245620**. Its published Windows minimum specifies
