@@ -9,6 +9,7 @@ import sys
 import time
 
 from . import game_mode
+from .games import get_game, for_profile, from_receipt, binding, require_launch
 from .runtime import clean_env, start
 from .storage import ManagerError, atomic_json, lock, no_symlinks
 
@@ -59,12 +60,13 @@ def process_candidates(executable):
             and parts[1].replace("\\", "/").lower().endswith("/" + executable.lower())]
 
 
-def game_candidates():
-    return process_candidates("deadlock.exe")
+def game_candidates(game=None):
+    return process_candidates((game or get_game()).process_name)
 
 
-def games_in_prefix(prefix):
-    return processes_in_prefix(prefix, "deadlock.exe", game_candidates())
+def games_in_prefix(prefix, game=None):
+    game = game or get_game()
+    return processes_in_prefix(prefix, game.process_name, game_candidates(game))
 
 
 def processes_in_prefix(prefix, executable, candidates=None):
@@ -118,8 +120,8 @@ def recover(directory=None):
         state = read_state(directory)
         if not state.get("restore_pending"):
             return state
-        if games_in_prefix(state["prefix"]):
-            raise ManagerError("Deadlock is still running. Use Play for this profile to resume its watcher, or exit the game before recovery.")
+        if games_in_prefix(state["prefix"], from_receipt(state)):
+            raise ManagerError("The game is still running. Use Play for this profile to resume its watcher, or exit the game before recovery.")
         restore_policy(game_mode.AppleTool(state["tool"]), directory / "session.json", state)
         return state
 
@@ -148,6 +150,9 @@ def stop_session(directory=None):
 def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=180, previous=None,
             startup_log=None):
     """A startup deadline only; once a game exists its lifetime is unbounded."""
+    game = for_profile(profile)
+    if previous and from_receipt(previous) != game:
+        raise ManagerError("Interrupted session belongs to another game; no policy was changed.")
     stopped = False
     handlers = {}
 
@@ -161,7 +166,7 @@ def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=18
                          "workspace": str(workspace), "profile": profile["id"],
                          "prefix": profile["prefix"], "phase": "waiting",
                          "started_utc": datetime.now(timezone.utc).isoformat()}
-    state.update(watcher_pid=os.getpid(), watcher_identity=game_mode.process_identity(os.getpid()))
+    state.update(**binding(game), watcher_pid=os.getpid(), watcher_identity=game_mode.process_identity(os.getpid()))
     if startup_log is not None:
         state['launch_log'] = str(startup_log)
     atomic_json(receipt, state)  # Persist recovery before any policy mutation.
@@ -171,14 +176,14 @@ def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=18
         tool.set("on")
         if tool.status() != {"enabled": True, "policy": "on"}:
             raise ManagerError("Apple's tool did not confirm Game Mode on.")
-        existing = games_in_prefix(profile["prefix"])
+        existing = games_in_prefix(profile["prefix"], for_profile(profile))
         if not existing and not previous:
             launch()
         ready()
         deadline = time.monotonic() + startup_seconds
         games = {}
         while not stopped:
-            games = existing or games_in_prefix(profile["prefix"])
+            games = existing or games_in_prefix(profile["prefix"], for_profile(profile))
             if games:
                 # Track every matching instance, never another bottle or a reused PID.
                 state.update(phase="playing", games={str(pid): identity for pid, identity in games.items()})
@@ -187,7 +192,7 @@ def session(tool, profile, workspace, receipt, launch, ready, startup_seconds=18
             if time.monotonic() >= deadline:
                 from .steam_startup import failure_summary
                 detail = failure_summary(startup_log) if startup_log else None
-                raise ManagerError(detail or "Deadlock did not start within three minutes. Check Steam for login, updates or Cloud prompts before retrying.")
+                raise ManagerError(detail or f"{game.title} did not start within three minutes. Check Steam for login, updates or Cloud prompts before retrying.")
             time.sleep(1)
         check_policy_at = 0
         while not stopped and games:
@@ -224,12 +229,13 @@ def worker(workspace, profile_id, tool_path, response, log):
     try:
         with lock(state_directory()):
             profile = load_profile(workspace, profile_id)
+            require_launch(profile)
             receipt = state_directory() / "session.json"
             previous = read_state()
             if previous.get("restore_pending"):
                 old_tool = game_mode.AppleTool(previous["tool"])
-                if games_in_prefix(previous["prefix"]):
-                    if previous["workspace"] != str(workspace) or previous["profile"] != profile_id:
+                if games_in_prefix(previous["prefix"], from_receipt(previous)):
+                    if previous["workspace"] != str(workspace) or previous["profile"] != profile_id or from_receipt(previous) != for_profile(profile):
                         raise ManagerError("An interrupted Game Mode session belongs to another running profile. Resume that profile first.")
                     tool = old_tool
                 else:
@@ -250,10 +256,10 @@ def worker(workspace, profile_id, tool_path, response, log):
 
             def ready():
                 atomic_json(response, {"ok": True, "watcher_pid": os.getpid()})
-                print("Game Mode enabled. Watching Deadlock until it exits; no play-time limit.", flush=True)
+                print(f"Game Mode enabled. Watching {for_profile(profile).title} until it exits; no play-time limit.", flush=True)
 
             session(tool, profile, workspace, receipt, launch, ready, previous=previous, startup_log=log)
-            print("Deadlock session ended; previous Game Mode policy restored.", flush=True)
+            print("Game session ended; previous Game Mode policy restored.", flush=True)
     except (ManagerError, OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         if str(exc) == "Another manager operation is running in this workspace.":
             exc = ManagerError("Another Game Mode session is already active. Check Play session status; its policy and game were left unchanged.")

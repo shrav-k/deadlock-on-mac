@@ -10,6 +10,7 @@ import re
 import subprocess
 
 from . import game_settings, wine_display
+from .games import require_deadlock, for_profile, from_receipt, binding, settings_adapter
 from .backup import wine_processes_running
 from .catalog import REPO
 from .runtime import clean_env, environment, steam_path, wine_binary
@@ -81,10 +82,8 @@ def match_guest(host, guests, retina):
 
 
 def sdl_path(profile):
-    path = no_symlinks(steam_path(profile).parent / 'steamapps/common/Deadlock/game/bin/win64/SDL3.dll')
-    if not path.is_file():
-        raise ManagerError('Install Deadlock in the default Steam library before preparing a display.')
-    return path
+    require_deadlock(profile, "SDL display mapping")
+    return settings_adapter(profile).sdl_path(profile)
 
 
 def state_path(workspace, profile):
@@ -96,7 +95,7 @@ def load(workspace, profile):
     if not path.exists():
         return None
     value = json.loads(no_symlinks(path).read_text())
-    if value.get('schema') != 1 or value.get('profile') != profile['id']:
+    if value.get('schema') != 1 or value.get('profile') != profile['id'] or from_receipt(value) != for_profile(profile):
         raise ManagerError('Invalid saved display selection.')
     return value
 
@@ -106,6 +105,7 @@ def status(workspace, profile):
 
 
 def require_supported(profile):
+    require_deadlock(profile, "Display preparation")
     if profile.get('runtime_version') != 'highball-wine-20261006' or profile.get('provider') != 'wine':
         raise ManagerError('Display preparation currently supports the qualified Highball Wine runtime only.')
 
@@ -117,7 +117,7 @@ def probe(profile, *, window_index=None, allow_running=False, stopped=None, repo
     running = wine_processes_running()
     if running and (not allow_running or window_index is not None):
         raise ManagerError('Exit Windows Steam and all Wine bottles before display preparation/testing.')
-    if running and not any(processes_in_prefix(profile['prefix'], name) for name in ('steam.exe', 'deadlock.exe')):
+    if running and not any(processes_in_prefix(profile['prefix'], name) for name in ('steam.exe', for_profile(profile).process_name)):
         raise ManagerError('Another Wine session is active. Close it before checking this display selection.')
     env = environment(profile)
     env['WINEDEBUG'] = '-all,err+all'
@@ -142,7 +142,7 @@ def probe(profile, *, window_index=None, allow_running=False, stopped=None, repo
         # Never stop a Steam/game that appeared during the diagnostic. wineboot
         # requests normal session shutdown, not a wineserver kill.
         if not running:
-            if any(processes_in_prefix(profile['prefix'], name) for name in ('steam.exe', 'deadlock.exe')):
+            if any(processes_in_prefix(profile['prefix'], name) for name in ('steam.exe', for_profile(profile).process_name)):
                 raise ManagerError('Steam or Deadlock started during the display check. Close them before retrying.')
             subprocess.run([str(wine_binary(profile)), 'wineboot', '-e', '-s'], env=env,
                            cwd=profile['prefix'], capture_output=True, timeout=20, check=True)
@@ -166,7 +166,7 @@ def prepare(workspace, profile, choice, retina='auto', report=print):
     if 'setting.monitor_index' not in game_settings.plan(profile)[2]:
         raise ManagerError('This game configuration has no supported monitor selector.')
     sdl = sdl_path(profile)
-    state = {'schema': 1, 'profile': profile['id'], 'choice': choice, 'retina_policy': retina,
+    state = {'schema': 1, **binding(for_profile(profile)), 'profile': profile['id'], 'choice': choice, 'retina_policy': retina,
              'target_id': target['id'], 'target_name': target['name'], 'phase': 'preparing'}
     atomic_json(state_path(workspace, profile), state)
     edit = None
@@ -232,7 +232,7 @@ def validate_launch(workspace, profile, *, live=True):
 
 
 def clear(workspace, profile):
-    atomic_json(state_path(workspace, profile), {'schema': 1, 'profile': profile['id'], 'phase': 'unmanaged'})
+    atomic_json(state_path(workspace, profile), {'schema': 1, **binding(for_profile(profile)), 'profile': profile['id'], 'phase': 'unmanaged'})
     return {'note': 'Display management disabled. Current game resolution and Wine Retina setting were preserved; use the game settings to change them.'}
 
 

@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "games": {
+    "deadlock": {
+      "version": 1,
+      "title": "Deadlock",
+      "steam_app_id": "1422450",
+      "process_name": "deadlock.exe",
+      "install_directory": "Deadlock",
+      "launch_strategy": "steam-uri",
+      "graphics_api": "d3d11",
+      "settings_adapter": "deadlock",
+      "status": "experimental",
+      "hotfixes": true
+    },
+    "elden-ring-seamless": {
+      "version": 1,
+      "title": "Elden Ring — Seamless Co-op",
+      "steam_app_id": "1245620",
+      "process_name": "eldenring.exe",
+      "install_directory": "ELDEN RING",
+      "launch_strategy": "seamless-launcher",
+      "graphics_api": "d3d12",
+      "settings_adapter": "elden-ring-seamless",
+      "status": "research",
+      "hotfixes": false
+    }
+  }
+}

@@ -13,6 +13,7 @@ import zipfile
 from .runtime import clean_env, steam_path
 from .steam import data_roots
 from .storage import ManagerError, private_dir
+from .games import for_profile, settings_adapter
 
 
 def wine_processes_running():
@@ -23,14 +24,14 @@ def wine_processes_running():
     # Conservative, read-only check across runtimes. No PID signalling, no command
     # lines or environment blocks stored in reports. Exit other bottles too.
     return any(re.search(r"(?i)(?:^|[/\\])(?:wine(?:64)?(?:-preloader)?|wineserver|steam\.exe|"
-                         r"steamwebhelper\.exe|deadlock\.exe)$", line.strip())
+                         r"steamwebhelper\.exe|deadlock\.exe|eldenring\.exe|ersc_launcher\.exe|modengine2_launcher\.exe)$", line.strip())
                for line in result.stdout.splitlines())
 
 
-def collect_files(steam):
+def collect_files(steam, game=None):
     base = steam.parent
     files = []
-    for root in data_roots(steam):
+    for root in data_roots(steam, game):
         if root.is_symlink() or not root.resolve().is_relative_to(base.resolve()):
             raise ManagerError("Refusing a save directory linked outside Steam.")
         for directory, dirs, names in os.walk(root, followlinks=False):
@@ -49,10 +50,11 @@ def snapshot(profile, destination, *, check_running=wine_processes_running):
     if check_running():
         raise ManagerError("Exit Steam and all Wine bottles before backing up. No processes were stopped.")
     steam = steam_path(profile)
+    game = for_profile(profile)
     base = steam.parent
-    files = collect_files(steam)
+    files = collect_files(steam, game)
     if not files:
-        raise ManagerError("No Deadlock data exists in this profile yet; no empty backup was created.")
+        raise ManagerError(f"No {game.title} data exists in this profile yet; no empty backup was created.")
     if sum(s.st_size for _, s in files) > 2 * 1024**3 or len(files) > 20000:
         raise ManagerError("Game data exceeds the 2 GiB / 20,000-file backup limit.")
     destination = private_dir(destination)
@@ -79,11 +81,11 @@ def snapshot(profile, destination, *, check_running=wine_processes_running):
                             out.write(data)
                 inventory[name] = digest.hexdigest()
             archive.writestr("backup-manifest.json", json.dumps({
-                "schema": 1, "app_id": "1422450", "profile": profile["id"],
+                "schema": 1, "app_id": game.steam_app_id, "profile": profile["id"],
                 "created_utc": timestamp, "files": inventory,
-                "scope": "Deadlock userdata and game/citadel/cfg; not a full bottle backup"
+                "scope": settings_adapter(profile).BACKUP_SCOPE
             }, indent=2))
-        after_files = collect_files(steam)
+        after_files = collect_files(steam, game)
         if [p for p, _ in after_files] != [p for p, _ in files]:
             raise ManagerError("Game files appeared or disappeared during backup; snapshot was discarded.")
         for (_, before), (_, after) in zip(files, after_files):

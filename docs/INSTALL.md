@@ -1,10 +1,9 @@
 # Installation, Steam and Game Mode
 
-This is the canonical setup guide. The active development branch is
-`maintain/free-steam-runtime-manager`, tracked by [draft PR #1](https://github.com/shrav-k/deadlock-on-mac/pull/1).
-The fork's default `main` still has the original upstream installer; use the branch
-above until the maintained manager is merged. No public player-ready app release
-is available yet.
+This is the canonical Deadlock setup guide. The maintained manager was merged to
+`main` in [PR #1](https://github.com/shrav-k/deadlock-on-mac/pull/1).
+No public player-ready app release is available yet. The separate Elden Ring
+[research recipe](ELDEN-RING.md) is not enabled for gameplay.
 
 ## Choose your installation path
 
@@ -76,7 +75,7 @@ Clone this repo inside `Projects/Games/Deadlock`:
 ```sh
 mkdir -p ~/Projects/Games/Deadlock
 cd ~/Projects/Games/Deadlock
-git clone --branch maintain/free-steam-runtime-manager https://github.com/shrav-k/deadlock-on-mac.git
+git clone https://github.com/shrav-k/deadlock-on-mac.git
 cd deadlock-on-mac
 python3 bin/deadlock-mac runtime-install --runtime highball
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer python3 packaging/build_wine_hotfix.py \
