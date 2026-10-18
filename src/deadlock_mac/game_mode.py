@@ -156,22 +156,24 @@ def process_identity(pid):
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def find_game():
+def find_game(game=None):
     result = subprocess.run(["/bin/ps", "-ww", "-axo", "pid=,comm="],
                             capture_output=True, text=True, timeout=5, env=clean_env())
     if result.returncode:
         raise ManagerError("Could not inspect running game processes.")
-    return select_game(result.stdout)
+    return select_game(result.stdout, game)
 
 
-def select_game(processes):
+def select_game(processes, game=None):
+    from .games import get_game
+    game = game or get_game()
     candidates = []
     for line in processes.splitlines():
         parts = line.strip().split(None, 1)
-        if len(parts) == 2 and parts[0].isdigit() and parts[1].lower().endswith("\\deadlock.exe"):
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].lower().endswith("\\" + game.process_name):
             candidates.append(int(parts[0]))
     if len(candidates) != 1:
-        raise ManagerError("Expected exactly one running Deadlock game. Launch it through Steam first; use --test-pid when comparing multiple instances.")
+        raise ManagerError(f"Expected exactly one running {game.title} game. Launch it through Steam first; use --test-pid when comparing multiple instances.")
     return candidates[0]
 
 
@@ -195,15 +197,17 @@ def restore(tool, receipt):
     return current
 
 
-def trial(tool, pid, seconds, receipt, report=print, cancelled=None):
+def trial(tool, pid, seconds, receipt, report=print, cancelled=None, *, game=None):
+    from .games import get_game, binding
+    game = game or get_game()
     if cancelled is not None and cancelled.is_set():
         raise ManagerError("Game Mode diagnostic cancelled before startup.")
     if type(seconds) is not int or not 1 <= seconds <= 900:
         raise ManagerError("Game Mode tests must last between 1 and 900 seconds.")
     receipt = no_symlinks(receipt)
     identity = process_identity(pid)
-    if not identity.lower().endswith("\\deadlock.exe"):
-        raise ManagerError("The selected PID is not a running Windows Deadlock process.")
+    if not identity.lower().endswith("\\" + game.process_name):
+        raise ManagerError(f"The selected PID is not a running Windows {game.title} process.")
     if receipt.exists():
         previous = json.loads(receipt.read_text())
         if not isinstance(previous, dict) or previous.get("schema") != 1:
@@ -213,7 +217,7 @@ def trial(tool, pid, seconds, receipt, report=print, cancelled=None):
     before = tool.status()
     if before["policy"] != "auto":
         raise ManagerError("A Game Mode override already exists. This test requires automatic policy.")
-    state = {"schema": 1, "original_policy": "auto", "restore_pending": True,
+    state = {"schema": 1, **binding(game), "original_policy": "auto", "restore_pending": True,
              "tool": str(tool.path), "pid": pid, "process_identity": identity,
              "maximum_seconds": seconds, "started_utc": datetime.now(timezone.utc).isoformat()}
     atomic_json(receipt, state)  # Recovery must exist before the first mutation.
@@ -231,7 +235,7 @@ def trial(tool, pid, seconds, receipt, report=print, cancelled=None):
         enabled = tool.status()
         if enabled != {"enabled": True, "policy": "on"}:
             raise ManagerError("Apple's tool did not confirm Game Mode on.")
-        report(f"Game Mode is on for a test of at most {seconds} seconds. Check Deadlock's HUD. Ctrl-C ends and restores the test.")
+        report(f"Game Mode is on for a test of at most {seconds} seconds. Check {game.title}'s HUD. Ctrl-C ends and restores the test.")
         deadline = time.monotonic() + seconds
         while not stopped and not (cancelled is not None and cancelled.is_set()) and time.monotonic() < deadline and process_identity(pid) == identity:
             time.sleep(min(1, max(0, deadline - time.monotonic())))

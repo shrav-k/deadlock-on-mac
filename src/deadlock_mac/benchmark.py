@@ -16,6 +16,7 @@ from .runtime import clean_env, steam_path
 from .steam import game_status
 from .storage import ManagerError, atomic_json, identifier, no_symlinks
 from .telemetry import summarize
+from .games import for_profile, from_receipt, binding
 
 
 def now():
@@ -60,21 +61,21 @@ def start(workspace, profile, scenario, resolution):
         raise ManagerError("Use a short scenario and display description; omit personal/player information.")
     if not performance.load(workspace, profile["id"])["hud_logging"]:
         raise ManagerError("Enable performance --hud-log on and restart Steam before recording.")
-    games = game_session.games_in_prefix(profile["prefix"])
+    games = game_session.games_in_prefix(profile["prefix"], for_profile(profile))
     if len(games) != 1:
-        raise ManagerError("Start exactly one Deadlock game in this profile before recording.")
+        raise ManagerError(f"Start exactly one {for_profile(profile).title} game in this profile before recording.")
     pid, identity = next(iter(games.items()))
     path = game_log(workspace, pid)
     info = path.stat()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-").lower() + uuid.uuid4().hex[:8]
-    state = {"schema": 1, "id": run_id, "profile": profile["id"], "phase": "recording",
+    state = {"schema": 1, **binding(for_profile(profile)), "id": run_id, "profile": profile["id"], "phase": "recording",
              "start_time": now(), "pid": pid, "process_identity": identity,
              "log": str(path), "log_inode": info.st_ino, "log_device": info.st_dev,
              "start_offset": info.st_size, "scenario": scenario,
              "resolution_user_reported": resolution, "markers": [],
              "runtime_version": profile.get("runtime_version"), "dxmt_version": profile.get("dxmt_version"),
              "wine_hotfix": hotfix.status(profile), "macos": platform.mac_ver()[0],
-             "architecture": platform.machine(), "game": game_status(steam_path(profile)),
+             "architecture": platform.machine(), "game": game_status(steam_path(profile), for_profile(profile)),
              "performance_requested": performance.load(workspace, profile["id"]),
              "graphics_before": game_settings.rendering_snapshot(profile),
              "before": snapshot()}
@@ -86,7 +87,8 @@ def start(workspace, profile, scenario, resolution):
 def load(workspace, profile, run_id):
     path = no_symlinks(folder(workspace) / (identifier(run_id) + ".json"))
     state = json.loads(path.read_text())
-    if state.get("profile") != profile["id"] or state.get("phase") != "recording":
+    if (state.get("profile") != profile["id"] or state.get("phase") != "recording"
+            or from_receipt(state) != for_profile(profile)):
         raise ManagerError("Benchmark is not recording for this profile.")
     return path, state
 
@@ -123,7 +125,7 @@ def finish(workspace, profile, run_id, warmup_seconds=0):
     unchanged = (graphics_before["sha256"] == graphics_after["sha256"]
                  and graphics_before.get("fps_limits") == graphics_after.get("fps_limits")
                  if graphics_before.get("available") and graphics_after.get("available") else None)
-    report.update(end_time=end, after=snapshot(), metrics=metrics,
+    report.update(**binding(for_profile(profile)), end_time=end, after=snapshot(), metrics=metrics,
                   graphics_before=graphics_before, graphics_after=graphics_after,
                   saved_graphics_unchanged=unchanged,
                   limitations="User-marked observation, not a deterministic benchmark. Power and Game Mode receipt sampled only at boundaries; not continuous thermal/GPU-utilization telemetry. Report includes loading/focus gaps unless excluded explicitly. Review free-text labels before sharing.")

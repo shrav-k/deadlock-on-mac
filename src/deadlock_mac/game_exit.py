@@ -6,6 +6,7 @@ import subprocess
 import time
 
 from . import game_mode, game_session
+from .games import for_profile, from_receipt
 from .runtime import environment, exit_command, steam_control_command, verify_crossover
 from .storage import ManagerError
 
@@ -27,7 +28,7 @@ def stop_orphan_overlays(profile, overlays, report):
     signalled = False
     for name, processes in overlays.items():
         for pid, identity in processes.items():
-            if (game_session.games_in_prefix(profile['prefix'])
+            if (game_session.games_in_prefix(profile['prefix'], for_profile(profile))
                     or any(game_session.processes_in_prefix(profile['prefix'], core) for core in STEAM_CORE)):
                 raise ManagerError('Steam or Deadlock restarted during overlay cleanup; no further processes were stopped.')
             # Re-resolve bottle ownership and start identity immediately before signalling.
@@ -43,12 +44,14 @@ def stop_orphan_overlays(profile, overlays, report):
     return signalled
 
 
-def finish_session(workspace, profile_id, timeout=20):
+def finish_session(workspace, profile_id, timeout=20, *, game=None):
     deadline = time.monotonic() + timeout
     while True:
         state = game_session.status()
         if state.get("workspace") != str(workspace) or state.get("profile") != profile_id:
             return "No Game Mode session belongs to this profile."
+        if game is not None and from_receipt(state) != game:
+            raise ManagerError("Game Mode receipt belongs to another game; restore that session before retrying.")
         if not state.get("restore_pending"):
             return f"Game Mode restored to {state.get('final_status', {}).get('policy', state.get('original_policy', 'unknown'))}."
         if state.get("watcher_running") and state.get("phase") == "waiting":
@@ -102,25 +105,26 @@ def wait_for_wine_shutdown(profile, timeout=20):
 
 
 def close(workspace, profile, log, timeout=30, report=print):
-    games = game_session.games_in_prefix(profile["prefix"])
+    title = for_profile(profile).title
+    games = game_session.games_in_prefix(profile["prefix"], for_profile(profile))
     if len(games) > 1:
-        raise ManagerError("Multiple Deadlock processes are running in this bottle; close them in the game before retrying.")
+        raise ManagerError(f"Multiple {title} processes are running in this bottle; close them in the game before retrying.")
     if not games:
-        return "Deadlock is already closed. " + finish_session(workspace, profile["id"])
+        return f"{title} is already closed. " + finish_session(workspace, profile["id"], game=for_profile(profile))
     pid, identity = next(iter(games.items()))
     if not game_session.processes_in_prefix(profile["prefix"], "steam.exe"):
-        raise ManagerError("Windows Steam is not running in this profile. Use Deadlock's Exit Game option.")
+        raise ManagerError(f"Windows Steam is not running in this profile. Use {title}'s Exit Game option.")
     if game_mode.process_identity(pid) != identity:
-        raise ManagerError("Deadlock changed while preparing Exit. Retry to inspect the current process.")
+        raise ManagerError(f"{title} changed while preparing Exit. Retry to inspect the current process.")
     result = send(profile, exit_command(profile), log)
     if result.returncode and game_mode.process_identity(pid) == identity:
-        raise ManagerError(f"Could not request a normal Deadlock close. See {log}. No process was force-killed.")
-    report("Steam was asked to stop Deadlock normally. Waiting for actual exit; Steam stays open.")
+        raise ManagerError(f"Could not request a normal {title} close. See {log}. No process was force-killed.")
+    report(f"Steam was asked to stop {title} normally. Waiting for actual exit; Steam stays open.")
     if not wait_for_exit(games, timeout):
-        raise ManagerError("Steam's stop request did not close Deadlock. Check for a confirmation or Wine error dialog and inspect Play session status. No process was force-killed or Game Mode restoration claimed.")
-    if game_session.games_in_prefix(profile["prefix"]):
-        raise ManagerError("Another Deadlock process appeared during Exit. Retry; Game Mode restoration has not been claimed.")
-    return "Deadlock exited. Steam remains open for synchronization. " + finish_session(workspace, profile["id"])
+        raise ManagerError(f"Steam's stop request did not close {title}. Check for a confirmation or Wine error dialog and inspect Play session status. No process was force-killed or Game Mode restoration claimed.")
+    if game_session.games_in_prefix(profile["prefix"], for_profile(profile)):
+        raise ManagerError(f"Another {title} process appeared during Exit. Retry; Game Mode restoration has not been claimed.")
+    return f"{title} exited. Steam remains open for synchronization. " + finish_session(workspace, profile["id"], game=for_profile(profile))
 
 
 def close_steam(workspace, profile, log, timeout=60, report=print):
@@ -130,7 +134,7 @@ def close_steam(workspace, profile, log, timeout=60, report=print):
     if len(clients) > 1:
         raise ManagerError("Multiple Windows Steam clients belong to this profile; shutdown was not sent.")
     # Recheck the game after restoration, before asking Steam to shut down.
-    if game_session.games_in_prefix(profile["prefix"]):
+    if game_session.games_in_prefix(profile["prefix"], for_profile(profile)):
         raise ManagerError("Deadlock started again. Close it before exiting Steam.")
     if clients:
         result = send(profile, steam_control_command(profile, "steam"), log)
@@ -170,4 +174,4 @@ def close_steam(workspace, profile, log, timeout=60, report=print):
     message = "Windows Steam and its helpers exited. " if clients else "Windows Steam and its helpers are closed. "
     if orphan_recovered:
         message += 'A leftover overlay required SIGTERM recovery after Steam and Deadlock exited. '
-    return message + finish_session(workspace, profile["id"])
+    return message + finish_session(workspace, profile["id"], game=for_profile(profile))

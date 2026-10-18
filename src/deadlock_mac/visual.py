@@ -13,10 +13,11 @@ import time
 import uuid
 
 from . import game_session, game_mode
+from .games import for_profile, from_receipt, binding, require_deadlock
 from .runtime import clean_env
 from .storage import ManagerError, atomic_json, identifier, no_symlinks, private_dir, sha256
 
-TARGETS = {"deadlock": ("deadlock.exe",), "steam": ("steam.exe", "steamwebhelper.exe"),
+TARGETS = {"game": (), "deadlock": (), "steam": ("steam.exe", "steamwebhelper.exe"),
            "grid": ("wine-displays.exe",)}
 KEYS = {"escape", "return", "tab", "space", "left", "right", "up", "down",
         "w", "a", "s", "d", "q", "e", "1", "2", "3", "4"}
@@ -51,9 +52,12 @@ def native(workspace, request):
 
 def candidates(profile, target):
     if profile.get("provider") != "wine" or target not in TARGETS:
-        raise ManagerError("Choose deadlock, steam or grid in a Wine profile.")
+        raise ManagerError("Choose game, steam or grid in a Wine profile (deadlock remains a legacy alias).")
+    if target == "deadlock":
+        require_deadlock(profile, "The deadlock capture alias")
+    names = (for_profile(profile).process_name,) if target in ("game", "deadlock") else TARGETS[target]
     result = {}
-    for name in TARGETS[target]:
+    for name in names:
         result.update(game_session.processes_in_prefix(profile["prefix"], name))
     if not result:
         raise ManagerError(f"No running {target} process in this profile.")
@@ -73,10 +77,11 @@ def permissions(workspace, action="status", backend=native):
 def session(workspace, profile, enabled=None):
     path = folder(workspace, profile) / "input-session.json"
     if enabled is not None:
-        atomic_json(path, {"schema": 1, "profile": profile["id"], "enabled": bool(enabled),
+        atomic_json(path, {"schema": 1, **binding(for_profile(profile)), "profile": profile["id"], "enabled": bool(enabled),
                            "expires_at": time.time() + 4 * 3600 if enabled else 0})
     value = json.loads(path.read_text()) if path.exists() else {"enabled": False, "expires_at": 0}
-    return {**value, "active": value.get("enabled") is True and value.get("expires_at", 0) > time.time()}
+    return {**value, "active": value.get("enabled") is True and value.get("expires_at", 0) > time.time()
+            and from_receipt(value) == for_profile(profile)}
 
 
 def windows(workspace, profile, target, backend=native):
@@ -114,7 +119,7 @@ def capture(workspace, profile, target, window_id=None, backend=native):
         if not image.is_file() or image.stat().st_size == 0:
             raise ManagerError("Capture produced no image.")
         image.chmod(0o600)
-        state = {**reply, "schema": 1, "id": capture_id, "profile": profile["id"], "target": target,
+        state = {**reply, "schema": 1, **binding(for_profile(profile)), "id": capture_id, "profile": profile["id"], "target": target,
                  "prefix": str(profile["prefix"]), "created_at": time.time(), "process_identity": identity,
                  "image_sha256": sha256(image), "input_used": False}
         atomic_json(root / (capture_id + ".json"), state)
@@ -128,6 +133,7 @@ def capture(workspace, profile, target, window_id=None, backend=native):
 def validate_input(state, profile, command, x=None, y=None, key=None, now=None, hold_ms=40):
     now = time.time() if now is None else now
     if (state.get("schema") != 1 or state.get("profile") != profile["id"]
+            or from_receipt(state) != for_profile(profile)
             or state.get("prefix") != str(profile["prefix"]) or state.get("target") not in TARGETS
             or state.get("input_used") is not False
             or not 0 <= now - state.get("created_at", 0) <= MAX_AGE):

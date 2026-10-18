@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Extract shared Wine/provider and Steam services with legacy import compatibility;
+  move Deadlock graphics, data and SDL paths into a reviewed game adapter.
+- Add versioned Deadlock and research-only Elden Ring Seamless Co-op definitions,
+  explicit bindings for new profiles and unchanged implicit legacy profile behavior.
+- Scope lifecycle, recovery, benchmark and capture evidence by game; prevent
+  Deadlock settings/hotfixes or vanilla launch fallback from leaking into Elden Ring.
+- Document the source-monorepo/private-campaign split, mod requirements and D3D12
+  qualification gap. No mod, save or existing installation migration is performed.
+
 ## 0.5.0 — development
 
 - Add optional Steam Big Picture and permission-gated ScreenCaptureKit capture

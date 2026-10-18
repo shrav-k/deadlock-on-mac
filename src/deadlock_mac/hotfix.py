@@ -5,6 +5,7 @@ import shutil
 import tempfile
 
 from .catalog import REPO
+from .games import for_profile
 from .storage import ManagerError, atomic_json, no_symlinks, private_dir, sha256
 
 
@@ -38,7 +39,7 @@ def verify(directory, spec=None):
 
 
 def compatible(profile, spec):
-    return (profile.get("provider") == "wine" and profile.get("wine_family") == "highball"
+    return (for_profile(profile).hotfixes and profile.get("provider") == "wine" and profile.get("wine_family") == "highball"
             and profile.get("runtime_version") == spec["runtime_version"])
 
 

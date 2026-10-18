@@ -9,6 +9,12 @@ sustained performance remain under investigation.**
 See the [compatibility ledger](docs/COMPATIBILITY.md) for observed results rather
 than inferred compatibility.
 
+The launcher is being standardized around shared Wine/Steam services and
+versioned game adapters. Deadlock remains the enabled game; Elden Ring Seamless
+Co-op is a research-only recipe pending a qualified D3D12 runtime and mod launch
+path. See [game recipes and repository structure](docs/GAME-RECIPES.md) and
+[Elden Ring requirements](docs/ELDEN-RING.md).
+
 The default free candidate is **Highball's Wine 11 build + its paired DXMT build**.
 Steam login, installation, restart and a Direct3D rendering probe work on our M2 Max.
 The clean installation also reached Deadlock's menu after a failed first launch.
@@ -21,14 +27,13 @@ experiments preserve the existing setup.
 
 ## Start here
 
-Use the [complete installation and Game Mode guide](docs/INSTALL.md). **This work
-is currently on `maintain/free-steam-runtime-manager`; the fork's default `main`
-branch still contains the original installer.** Clone the maintained branch:
+Use the [complete installation and Game Mode guide](docs/INSTALL.md). The
+maintained launcher is on `main`:
 
 ```sh
 mkdir -p ~/Projects/Games/Deadlock
 cd ~/Projects/Games/Deadlock
-git clone --branch maintain/free-steam-runtime-manager https://github.com/shrav-k/deadlock-on-mac.git
+git clone https://github.com/shrav-k/deadlock-on-mac.git
 cd deadlock-on-mac
 ```
 

@@ -13,14 +13,15 @@ must not be described as proof that the game works out of the box.
 | `config/runtimes.json` | Named runtime combinations, adapter family, OS minimum and compatibility status |
 | `config/runtime-lock.json` | Versioned artifacts, exact digests, extraction layout, source/license provenance |
 | `catalog.py` | Validate the catalog and resolve a combination to its component artifacts |
-| `runtime.py` | Wine-family and official CrossOver launch adapters; isolated environment and Steam-only game launch |
-| `steam.py` | Narrow app manifest parsing and Deadlock data locations; no account authentication implementation |
+| `core/wine.py` | Wine-family and official CrossOver adapters; isolated environment and recipe-selected launch commands; `runtime.py` preserves legacy imports |
+| `core/steam.py` | Narrow game-selected app manifest parsing; no account authentication implementation; `steam.py` preserves legacy imports |
+| `config/games.json` / `games/` | Versioned game definitions, qualification gates and reviewed settings/data adapters |
 | `storage.py` | HTTPS downloads, archive validation, immutable installations, integrity checks and atomic state |
 | `backup.py` | Offline, game-only snapshots with a file hash manifest |
 | `diagnostics.py` | Read-only native dependency inspection, with explicit scope and unresolved libraries |
 | `performance.py` | Validated per-profile FPS cap, Wine synchronization and Metal HUD settings |
 | `displays.py` / `native/` | Named host displays, guest mapping, offline preparation and Play validation; no macOS display changes |
-| `game_settings.py` | Backed-up offline display/FPS/native-rendering edits and allowlisted graphics receipts; display edits preserve quality and render scale |
+| `game_settings.py` / `games/deadlock.py` | Compatibility dispatcher and Deadlock-specific backed-up settings edits, graphics receipts, SDL and backup paths |
 | `game_mode.py` | Optional Apple-tool status, bounded system-wide Game Mode tests and recovery receipts |
 | `game_session.py` / `session_worker.py` | Detached normal-Play lifetime, per-user policy ownership, bottle matching and prior-policy recovery |
 | `telemetry.py` | Per-process Metal presentation-interval summaries, excluding other apps and warm-up |
@@ -138,13 +139,15 @@ historical runs and [quality protocol](QUALITY.md) for promotion criteria.
 
 ## Evolving into a launcher with game recipes
 
-The current implementation is still Deadlock-specific: the Steam app ID,
-executable matching, save/config paths, setting adapters and some display probes
-assume Deadlock. Runtime adapters are reusable foundations, not proof that an
-arbitrary Steam title is supported. Keep Deadlock as the first qualified recipe
-and extract shared behavior only behind tests that preserve its working setup.
+The first recipe extraction is implemented: Steam app identity, process matching,
+settings dispatch and hotfix eligibility are selected by a versioned game
+definition. Deadlock remains the only enabled gameplay recipe; Elden Ring Seamless
+Co-op is a research definition with explicit D3D12 and launch-route blockers.
+Display preparation and save writes still require qualified game-specific adapters.
+See [the repository and migration design](GAME-RECIPES.md) and
+[Elden Ring requirements](ELDEN-RING.md). This is not arbitrary-game support.
 
-The proposed boundary is one launcher core plus versioned game recipes:
+The boundary is one launcher core plus versioned game recipes:
 
 | Layer | Owns |
 | --- | --- |
@@ -210,12 +213,12 @@ integration alongside Deadlock. This is planned scope, not current compatibility
 or installation support. First verify the then-current upstream installation,
 launch and version requirements; do not infer them from Deadlock's Steam URI flow.
 
-Extract the existing behavior behind a tested `GameDefinition` before adding the
-second game: Steam app identity, executable/process ownership, settings/save
-adapters, launch strategy, dependencies and acceptance scenarios. Preserve the
-current Deadlock command defaults, profile identifiers and data with an explicit,
-versioned migration. Shared lifecycle, display, capture/input, Game Mode and
-telemetry services must receive a game definition rather than hardcoded paths.
+The tested `GameDefinition` boundary now owns Steam identity, executable matching,
+settings adapter, launch strategy and graphics requirements. Schema-1 profiles
+retain Deadlock semantics without rewriting any files; new schema-2 profiles bind
+their game and recipe version explicitly. Unknown versions require a future tested
+migration. Shared lifecycle, capture and telemetry consume that identity; the
+Deadlock SDL/display adapter remains explicitly gated until another is qualified.
 
 Model a mod as a separately versioned, optional recipe component with upstream
 provenance, verified artifacts, owned files and reversible install/update/remove

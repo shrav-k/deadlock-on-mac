@@ -26,6 +26,7 @@ from . import benchmark
 from . import wine_display
 from . import displays
 from . import visual
+from .games import DEFAULT_GAME, definitions, get_game, for_profile, binding, describe, require_launch
 from .telemetry import summarize
 from .runtime import (environment, launch_command, start, steam_path, validate_profile,
                       verify_crossover, wine_binary)
@@ -86,12 +87,13 @@ def load_profile(workspace, name):
     return validate_profile(json.loads(path.read_text()), workspace)
 
 
-def create_profile(workspace, name, crossover=None, family="highball"):
+def create_profile(workspace, name, crossover=None, family="highball", *, game_id=DEFAULT_GAME):
     path = profile_file(workspace, name)
     if path.exists():
         raise ManagerError("Profile already exists. Use a new ID to test another runtime; existing data is preserved.")
     prefix = workspace / "Bottles" / name
-    profile = {"schema": 1, "id": name, "prefix": str(prefix)}
+    game = get_game(game_id)
+    profile = {"schema": 2, "id": name, "prefix": str(prefix), **binding(game)}
     if crossover:
         version = verify_crossover(crossover)
         profile.update(provider="crossover", runtime=str(Path(crossover).absolute()),
@@ -151,6 +153,10 @@ def setup(workspace, profile):
 
 
 def bootstrap(workspace, name, family, game_mode_tool=None, without_game_mode=False):
+    # Bootstrap is the qualified game's complete recipe, including its overlays.
+    # A research profile must not silently receive Deadlock's installation recipe.
+    if profile_file(workspace, name).exists():
+        require_launch(load_profile(workspace, name))
     preflight(workspace, family)
     if wine_processes_running():
         raise ManagerError("Exit Windows Steam and all Wine bottles before setup. Use Open Steam or Play for an existing installation.")
@@ -181,6 +187,7 @@ def doctor(workspace, profile):
               "graphics_requested": profile["graphics"], "graphics_verified_in_game": False,
               "bottle_exists": Path(profile["prefix"]).is_dir(),
               "steam_account": "Sign in and verify in Steam; credentials are not inspected."}
+    result["game_definition"] = describe(for_profile(profile), profile)
     result["power"] = power_status()
     result["desktop_displays"] = display_status()
     result["performance_requested"] = performance.load(workspace, profile["id"])
@@ -193,7 +200,7 @@ def doctor(workspace, profile):
         result["note"] = str(exc)
     else:
         try:
-            result["game"] = game_status(steam)
+            result["game"] = game_status(steam, for_profile(profile))
         except ManagerError as exc:
             result["game_metadata_error"] = str(exc)
     if profile["provider"] == "wine":
@@ -207,16 +214,20 @@ def doctor(workspace, profile):
 def main(argv=None):
     try:
         runtime_catalog = catalog()
+        game_catalog = definitions()
     except (ManagerError, OSError, ValueError, KeyError, TypeError) as exc:
-        print(f"Error loading runtime catalog: {exc}", file=sys.stderr)
+        print(f"Error loading launcher catalogs: {exc}", file=sys.stderr)
         return 1
-    parser = argparse.ArgumentParser(description="Run Deadlock through your Steam account on macOS.")
+    parser = argparse.ArgumentParser(description="Manage game-specific Wine/Steam profiles on macOS; Deadlock remains the default.")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--workspace", type=Path, default=REPO.parent,
                         help="Deadlock workspace folder; runtimes, bottles and private state live here")
     parser.add_argument("--profile", default=runtime_catalog["default"])
     parser.add_argument("--manager-control-stdin", action="store_true", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("games", help="List versioned game recipes and qualification status")
+    p = sub.add_parser("game-info", help="Inspect game requirements without creating a profile or launching anything")
+    p.add_argument("game", choices=game_catalog)
     p = sub.add_parser("bootstrap", help="Check the Mac, install pinned runtimes and set up Windows Steam")
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     p.add_argument('--game-mode-tool', type=Path, help='Advanced override; normally discovered automatically')
@@ -226,6 +237,7 @@ def main(argv=None):
     p = sub.add_parser("runtime-verify", help="Check installed runtime files against pinned archives")
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     p = sub.add_parser("profile-create", help="Create an immutable runtime profile")
+    p.add_argument("--game", choices=game_catalog, default=DEFAULT_GAME)
     p.add_argument("--crossover", type=Path, help="Optional official CrossOver.app for comparison")
     p.add_argument("--runtime", choices=runtime_catalog["runtimes"], default=runtime_catalog["default"])
     sub.add_parser("runtimes", help="List available runtime combinations and known compatibility limits")
@@ -302,8 +314,8 @@ def main(argv=None):
     p.add_argument("--tool", type=Path, help="Advanced Apple tool override; otherwise discover a compatible prepared or Xcode tool")
     action = p.add_mutually_exclusive_group()
     action.add_argument('--prepare', action='store_true', help='Discover, validate and cache a compatible Apple tool without changing policy')
-    action.add_argument("--test", action="store_true", help="Find the one running Deadlock process and start a bounded test")
-    action.add_argument("--test-pid", type=int, help="Native deadlock.exe PID; temporarily force Game Mode on")
+    action.add_argument("--test", action="store_true", help="Find the profile's one running game process and start a bounded test")
+    action.add_argument("--test-pid", type=int, help="Native game PID; temporarily force Game Mode on")
     action.add_argument("--restore", action="store_true", help="Recover the previous automatic policy after an interrupted test")
     action.add_argument("--session", action="store_true", help="Read the normal Play session receipt")
     action.add_argument("--restore-session", action="store_true", help="Restore an interrupted Play session after the game exits")
@@ -319,6 +331,11 @@ def main(argv=None):
             private_dir(workspace)
         if not workspace.is_dir():
             raise ManagerError("Workspace must be an existing directory.")
+        if args.command in ("games", "game-info"):
+            result = ([describe(game) for game in game_catalog.values()] if args.command == "games"
+                      else describe(get_game(args.game)))
+            print(json.dumps(result, indent=2))
+            return 0
         if args.command == "runtimes":
             for name, entry in runtime_catalog["runtimes"].items():
                 print(f"{name}: {entry['label']} — {entry['status']}")
@@ -353,10 +370,11 @@ def main(argv=None):
                 if args.restore:
                     print(json.dumps(game_mode.restore(tool, receipt), indent=2))
                 else:
-                    pid = game_mode.find_game() if args.test else args.test_pid
+                    game = for_profile(load_profile(workspace, args.profile)) if profile_file(workspace, args.profile).exists() else get_game()
+                    pid = game_mode.find_game(game) if args.test else args.test_pid
                     from .diagnostic_control import cancellation
                     with cancellation(sys.stdin if args.manager_control_stdin else None) as stopped:
-                        game_mode.trial(tool, pid, args.seconds, receipt, cancelled=stopped,
+                        game_mode.trial(tool, pid, args.seconds, receipt, cancelled=stopped, game=game,
                                         report=lambda message: print(message, flush=True))
             return 0
         if args.command == "profiles":
@@ -456,7 +474,7 @@ def main(argv=None):
             elif args.command == "runtime-verify":
                 verify_runtimes(workspace, args.runtime)
             elif args.command == "profile-create":
-                create_profile(workspace, args.profile, args.crossover, args.runtime)
+                create_profile(workspace, args.profile, args.crossover, args.runtime, game_id=args.game)
             elif args.command == "setup":
                 setup(workspace, profile)
             elif args.command == "backup":
